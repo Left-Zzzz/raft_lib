@@ -1,0 +1,33 @@
+syntax="proto3"; //pb版本号
+package raftlib;  //pb包名
+option go_package = "./pb"; // 如果编译出现找不到go_package问题，建议添加声明
+
+service RpcService{
+    rpc rpcCall(stream reqInfoBase) returns (stream rspInfoBase);
+}
+
+message reqInfoBase {
+    optional int32 ver          = 1;
+    optional int32 message_type = 2;
+
+}
+
+message rspInfoBase {
+    optional int32 ver          = 1;
+    optional int32 message_type = 2;
+    
+}
+
+message voteRequest {
+    optional int32 ver = 1;
+    optional uint64 term = 2;
+    optional string candidateId = 3;
+    optional uint64 lastLogIdx = 4;
+    optional uint64 lastLogTerm = 5;
+}
+
+message voteResponse {
+    optional int32 ver = 1;
+    uint64 term = 2;
+    bool voteGranted = 3;
+}
