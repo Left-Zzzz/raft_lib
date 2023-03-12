@@ -11,8 +11,8 @@ const (
 
 // Servers: 服务器元信息列表
 var Servers = []Server{
-	{1, "0", "192.168.100.3"},
-	{1, "1", "192.168.100.4"},
+	{Voter, "0", "127.0.0.1", "5678"},
+	{Voter, "1", "127.0.0.1", "5679"},
 }
 
 // ServerAddress : 网络ip地址
@@ -43,4 +43,24 @@ type Server struct {
 	ID ServerID
 	// Address: 服务器网络地址
 	Address ServerAddress
+	// Port: 服务器端口号
+	Port ServerPort
 }
+
+// rpc proto版本号
+var (
+	RPOTO_VER_REQUEST_VOTE_REQUEST  uint32 = 1
+	RPOTO_VER_REQUEST_VOTE_RESPONSE uint32 = 1
+	RPOTO_VER_APPEND_ENTRY_REQUEST  uint32 = 1
+	RPOTO_VER_APPEND_ENTRY_RESPONSE uint32 = 1
+)
+
+// 是否启用Debug日志
+const (
+	DEBUG = true
+)
+
+// Dubug中需要打印的变量
+var (
+	isPrintRpcAppendEntryRequestCh = [2]bool{false, false}
+)

@@ -22,7 +22,8 @@ const _ = grpc.SupportPackageIsVersion7
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 type RpcServiceClient interface {
-	RpcCall(ctx context.Context, opts ...grpc.CallOption) (RpcService_RpcCallClient, error)
+	RequestVote(ctx context.Context, in *RequestVoteRequest, opts ...grpc.CallOption) (*RequestVoteResponse, error)
+	AppendEntry(ctx context.Context, in *AppendEntryRequest, opts ...grpc.CallOption) (*AppendEntryResponse, error)
 }
 
 type rpcServiceClient struct {
@@ -33,42 +34,30 @@ func NewRpcServiceClient(cc grpc.ClientConnInterface) RpcServiceClient {
 	return &rpcServiceClient{cc}
 }
 
-func (c *rpcServiceClient) RpcCall(ctx context.Context, opts ...grpc.CallOption) (RpcService_RpcCallClient, error) {
-	stream, err := c.cc.NewStream(ctx, &RpcService_ServiceDesc.Streams[0], "/raftlib.RpcService/rpcCall", opts...)
+func (c *rpcServiceClient) RequestVote(ctx context.Context, in *RequestVoteRequest, opts ...grpc.CallOption) (*RequestVoteResponse, error) {
+	out := new(RequestVoteResponse)
+	err := c.cc.Invoke(ctx, "/raftlib.RpcService/RequestVote", in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
-	x := &rpcServiceRpcCallClient{stream}
-	return x, nil
+	return out, nil
 }
 
-type RpcService_RpcCallClient interface {
-	Send(*ReqInfoBase) error
-	Recv() (*RspInfoBase, error)
-	grpc.ClientStream
-}
-
-type rpcServiceRpcCallClient struct {
-	grpc.ClientStream
-}
-
-func (x *rpcServiceRpcCallClient) Send(m *ReqInfoBase) error {
-	return x.ClientStream.SendMsg(m)
-}
-
-func (x *rpcServiceRpcCallClient) Recv() (*RspInfoBase, error) {
-	m := new(RspInfoBase)
-	if err := x.ClientStream.RecvMsg(m); err != nil {
+func (c *rpcServiceClient) AppendEntry(ctx context.Context, in *AppendEntryRequest, opts ...grpc.CallOption) (*AppendEntryResponse, error) {
+	out := new(AppendEntryResponse)
+	err := c.cc.Invoke(ctx, "/raftlib.RpcService/AppendEntry", in, out, opts...)
+	if err != nil {
 		return nil, err
 	}
-	return m, nil
+	return out, nil
 }
 
 // RpcServiceServer is the server API for RpcService service.
 // All implementations must embed UnimplementedRpcServiceServer
 // for forward compatibility
 type RpcServiceServer interface {
-	RpcCall(RpcService_RpcCallServer) error
+	RequestVote(context.Context, *RequestVoteRequest) (*RequestVoteResponse, error)
+	AppendEntry(context.Context, *AppendEntryRequest) (*AppendEntryResponse, error)
 	mustEmbedUnimplementedRpcServiceServer()
 }
 
@@ -76,8 +65,11 @@ type RpcServiceServer interface {
 type UnimplementedRpcServiceServer struct {
 }
 
-func (UnimplementedRpcServiceServer) RpcCall(RpcService_RpcCallServer) error {
-	return status.Errorf(codes.Unimplemented, "method RpcCall not implemented")
+func (UnimplementedRpcServiceServer) RequestVote(context.Context, *RequestVoteRequest) (*RequestVoteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method RequestVote not implemented")
+}
+func (UnimplementedRpcServiceServer) AppendEntry(context.Context, *AppendEntryRequest) (*AppendEntryResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method AppendEntry not implemented")
 }
 func (UnimplementedRpcServiceServer) mustEmbedUnimplementedRpcServiceServer() {}
 
@@ -92,30 +84,40 @@ func RegisterRpcServiceServer(s grpc.ServiceRegistrar, srv RpcServiceServer) {
 	s.RegisterService(&RpcService_ServiceDesc, srv)
 }
 
-func _RpcService_RpcCall_Handler(srv interface{}, stream grpc.ServerStream) error {
-	return srv.(RpcServiceServer).RpcCall(&rpcServiceRpcCallServer{stream})
-}
-
-type RpcService_RpcCallServer interface {
-	Send(*RspInfoBase) error
-	Recv() (*ReqInfoBase, error)
-	grpc.ServerStream
-}
-
-type rpcServiceRpcCallServer struct {
-	grpc.ServerStream
-}
-
-func (x *rpcServiceRpcCallServer) Send(m *RspInfoBase) error {
-	return x.ServerStream.SendMsg(m)
-}
-
-func (x *rpcServiceRpcCallServer) Recv() (*ReqInfoBase, error) {
-	m := new(ReqInfoBase)
-	if err := x.ServerStream.RecvMsg(m); err != nil {
+func _RpcService_RequestVote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RequestVoteRequest)
+	if err := dec(in); err != nil {
 		return nil, err
 	}
-	return m, nil
+	if interceptor == nil {
+		return srv.(RpcServiceServer).RequestVote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/raftlib.RpcService/RequestVote",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RpcServiceServer).RequestVote(ctx, req.(*RequestVoteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _RpcService_AppendEntry_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(AppendEntryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RpcServiceServer).AppendEntry(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/raftlib.RpcService/AppendEntry",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RpcServiceServer).AppendEntry(ctx, req.(*AppendEntryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
 }
 
 // RpcService_ServiceDesc is the grpc.ServiceDesc for RpcService service.
@@ -124,14 +126,16 @@ func (x *rpcServiceRpcCallServer) Recv() (*ReqInfoBase, error) {
 var RpcService_ServiceDesc = grpc.ServiceDesc{
 	ServiceName: "raftlib.RpcService",
 	HandlerType: (*RpcServiceServer)(nil),
-	Methods:     []grpc.MethodDesc{},
-	Streams: []grpc.StreamDesc{
+	Methods: []grpc.MethodDesc{
 		{
-			StreamName:    "rpcCall",
-			Handler:       _RpcService_RpcCall_Handler,
-			ServerStreams: true,
-			ClientStreams: true,
+			MethodName: "RequestVote",
+			Handler:    _RpcService_RequestVote_Handler,
+		},
+		{
+			MethodName: "AppendEntry",
+			Handler:    _RpcService_AppendEntry_Handler,
 		},
 	},
+	Streams:  []grpc.StreamDesc{},
 	Metadata: "messageDefine.proto",
 }

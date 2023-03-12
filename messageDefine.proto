@@ -3,31 +3,40 @@ package raftlib;  //pb包名
 option go_package = "./pb"; // 如果编译出现找不到go_package问题，建议添加声明
 
 service RpcService{
-    rpc rpcCall(stream reqInfoBase) returns (stream rspInfoBase);
+    rpc RequestVote(requestVoteRequest) returns (requestVoteResponse);
+    rpc AppendEntry(appendEntryRequest) returns (appendEntryResponse);
 }
 
-message reqInfoBase {
-    optional int32 ver          = 1;
-    optional int32 message_type = 2;
-
+message requestVoteRequest {
+    optional uint32 Ver = 1;
+    optional uint64 Term = 2;
+    optional string CandidateId = 3;
+    optional uint64 LastLogIdx = 4;
+    optional uint64 LastLogTerm = 5;
 }
 
-message rspInfoBase {
-    optional int32 ver          = 1;
-    optional int32 message_type = 2;
-    
+message requestVoteResponse {
+    optional uint32 Ver = 1;
+    string VoterID = 2;
+    uint64 Term = 3;
+    bool VoteGranted = 4;
 }
 
-message voteRequest {
-    optional int32 ver = 1;
-    optional uint64 term = 2;
-    optional string candidateId = 3;
-    optional uint64 lastLogIdx = 4;
-    optional uint64 lastLogTerm = 5;
+// appendEntryRequest 参数意义参考Raft论文
+message appendEntryRequest {
+    optional uint32 Ver = 1;
+    uint64 LeaderTerm = 2;
+    string LeaderID = 3;
+    uint64 PrevLogIndex = 4;
+    uint64 PrevLogTerm = 5;
+    uint64 LogType = 6;
+    optional bytes Entries = 7;
+    uint64 LeaderCommit = 8;
 }
 
-message voteResponse {
-    optional int32 ver = 1;
-    uint64 term = 2;
-    bool voteGranted = 3;
+// appendEntryResponse 参数意义参考Raft论文
+message appendEntryResponse {
+    optional uint32 Ver = 1;
+    uint64 Term = 2;
+    bool Success = 3;
 }
