@@ -3,6 +3,7 @@ package raftlib
 import (
 	"context"
 	"raft_lib/pb"
+	"time"
 )
 
 // RequestVote RPC请求流程
@@ -36,7 +37,10 @@ func (r *Rpc) AppendEntryRequest(
 	}
 	logDebug("start send append entry request.\n")
 
-	ctx := context.Background()
+	// 设置超时
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+
 	var resp *pb.AppendEntryResponse
 	resp, err = r.clients[peer.ID].AppendEntry(ctx, req)
 	if err != nil {

@@ -33,7 +33,7 @@ func TestRaftElection(t *testing.T) {
 	for _, node := range nodes {
 		go node.run()
 	}
-	<-time.After(ElectionTimeout * 4)
+	<-time.After(ElectionTimeout)
 	for key, node := range nodes {
 		log.Printf("node%d:state = %s, leader_id = %s.\n", key, node.getState(), string(node.Leader()))
 	}

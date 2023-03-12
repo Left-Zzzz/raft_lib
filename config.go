@@ -7,6 +7,8 @@ const (
 	HeartbeatTimeout = 1000 * time.Millisecond
 	// 选举超时时间
 	ElectionTimeout = 1000 * time.Millisecond
+	// RPC响应超时时间
+	RpcTimeout = 200 * time.Millisecond
 )
 
 // Servers: 服务器元信息列表
@@ -29,9 +31,9 @@ type ServerSuffrage int
 
 // ServerSuffrage类型
 const (
-	// Voter：当节点日志纪录追上领导者节点时候，具有Voter权限
+	// Voter：集群成员变更时，当节点日志纪录追上领导者节点时候，具有Voter权限
 	Voter ServerSuffrage = iota
-	// Nonvoter：当节点正在纪录日志且日志未追上领导者节点时，不具有Voter权限
+	// Nonvoter：集群成员变更时，当节点正在纪录日志且日志未追上领导者节点时，不具有Voter权限
 	Nonvoter
 )
 

@@ -6,7 +6,7 @@ import (
 	"testing"
 )
 
-// 判断功能是否正确
+// 判断功能是否正确,channel是否能正常收发
 func TestAppendEntriesRpc(t *testing.T) {
 	nodes := RaftCreateCluster(t)
 	if len(nodes) == 0 {

@@ -123,8 +123,7 @@ func (r *Rpc) AppendEntry(ctx context.Context, req *pb.AppendEntryRequest) (*pb.
 	// 将消息传送给channel
 	logDebug("AppendEntry(): append entry request channel addr:%p", r.rpcCh.rpcAppendEntryRequestCh)
 	r.rpcCh.rpcAppendEntryRequestCh <- req
-	logDebug("发送完成")
 	resp := <-r.rpcCh.rpcAppendEntryResponseCh
-	logDebug("rpcAppendEntryResponseCh resp:", resp)
+	logDebug("rpcAppendEntryResponseCh resp:%v", resp)
 	return resp, nil
 }

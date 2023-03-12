@@ -216,16 +216,27 @@ func (r *Raft) electSelf() <-chan *pb.RequestVoteResponse {
 }
 
 func (r *Raft) sendHeartBeatLoop() {
-	logInfo("send heart beat.")
-	req := &pb.AppendEntryRequest{
-		Ver:        &RPOTO_VER_APPEND_ENTRY_REQUEST,
-		LeaderTerm: r.getCurrentTerm(),
-		LeaderID:   string(r.Leader()),
-		LogType:    uint64(HeartBeat),
+	senHeartBeatInterval := HeartbeatTimeout / 2
+	heartBeatTimer := time.After(senHeartBeatInterval)
+	for {
+		<-heartBeatTimer
+		logInfo("leader send heart beat.")
+		req := &pb.AppendEntryRequest{
+			Ver:        &RPOTO_VER_APPEND_ENTRY_REQUEST,
+			LeaderTerm: r.getCurrentTerm(),
+			LeaderID:   string(r.Leader()),
+			LogType:    uint64(HeartBeat),
+		}
+		for _, server := range Servers {
+			// 不用给自己发送RPC请求
+			if server.ID == r.Leader() {
+				continue
+			}
+			// TODO 处理RPC回复
+			go r.rpc.AppendEntryRequest(server, req)
+			logDebug("process AppendEntryResponse.")
+		}
+		heartBeatTimer = time.After(senHeartBeatInterval)
 	}
-	for _, server := range Servers {
-		// TODO 处理RPC回复
-		go r.rpc.AppendEntryRequest(server, req)
-		logDebug("process AppendEntryResponse.")
-	}
+
 }
