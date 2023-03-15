@@ -23,14 +23,19 @@ type RpcCh struct {
 	// AppendEntryRPC channel
 	rpcAppendEntryRequestCh  chan *pb.AppendEntryRequest
 	rpcAppendEntryResponseCh chan *pb.AppendEntryResponse
+	// ExecCommandRPC channel
+	rpcExecCommandRequestCh  chan *pb.ExecCommandRequest
+	rpcExecCommandResponseCh chan *pb.ExecCommandResponse
 }
 
 type Rpc struct {
 	sync.RWMutex
-	server      *grpc.Server
-	clientConns map[ServerID]*grpc.ClientConn
-	clients     map[ServerID]pb.RpcServiceClient
-	rpcCh       *RpcCh
+	server           *grpc.Server
+	clientConns      map[ServerID]*grpc.ClientConn
+	clientConnsMutex sync.Mutex
+	clients          map[ServerID]pb.RpcServiceClient
+	clientsMutex     sync.Mutex
+	rpcCh            *RpcCh
 
 	// 继承 protoc-gen-go-grpc 生成的服务端代码
 	pb.UnimplementedRpcServiceServer
@@ -41,10 +46,12 @@ func (r *Rpc) createRpcServer(raft *Raft) (*grpc.Server, error) {
 	s := grpc.NewServer()
 	// 实例化RpcCh对象
 	rpcCh := &RpcCh{
-		rpcRequestVoteRequestCh:  make(chan *pb.RequestVoteRequest, 1),
-		rpcRequestVoteResponseCh: make(chan *pb.RequestVoteResponse, 1),
-		rpcAppendEntryRequestCh:  make(chan *pb.AppendEntryRequest, 1),
-		rpcAppendEntryResponseCh: make(chan *pb.AppendEntryResponse, 1),
+		rpcRequestVoteRequestCh:  make(chan *pb.RequestVoteRequest),
+		rpcRequestVoteResponseCh: make(chan *pb.RequestVoteResponse),
+		rpcAppendEntryRequestCh:  make(chan *pb.AppendEntryRequest),
+		rpcAppendEntryResponseCh: make(chan *pb.AppendEntryResponse),
+		rpcExecCommandRequestCh:  make(chan *pb.ExecCommandRequest),
+		rpcExecCommandResponseCh: make(chan *pb.ExecCommandResponse),
 	}
 	logDebug("createRpcServer():rpcCh:%v", *rpcCh)
 	// 将实现的接口注册进 gRPC 服务器
@@ -74,7 +81,10 @@ func (r *Rpc) runRpcServer(s *grpc.Server, port ServerPort) {
 // 启动rpc客户端
 func (r *Rpc) runRpcClient(peer Server) error {
 	// 如果已经创建过了，直接返回
-	if clientConnTemp, ok := r.clientConns[peer.ID]; ok {
+	r.clientConnsMutex.Lock()
+	clientConnTemp, ok := r.clientConns[peer.ID]
+	r.clientConnsMutex.Unlock()
+	if ok {
 		// 如果断线，尝试重连
 		if clientConnTemp.GetState() != connectivity.Ready {
 			clientConnTemp.Connect()
@@ -83,7 +93,6 @@ func (r *Rpc) runRpcClient(peer Server) error {
 		if clientConnTemp.GetState() != connectivity.Ready {
 			return errors.New("grpc client can not connect to server")
 		}
-		logDebug("gRPC client have been created.\n")
 		return nil
 	}
 	logDebug("Creating gRPC client.\n")
@@ -100,6 +109,10 @@ func (r *Rpc) runRpcClient(peer Server) error {
 		return err
 	}
 	// 创建RpcService
+	r.clientConnsMutex.Lock()
+	r.clientsMutex.Lock()
+	defer r.clientsMutex.Unlock()
+	defer r.clientConnsMutex.Unlock()
 	clientService := pb.NewRpcServiceClient(clientConn)
 	r.clientConns[peer.ID] = clientConn
 	r.clients[peer.ID] = clientService
@@ -125,5 +138,15 @@ func (r *Rpc) AppendEntry(ctx context.Context, req *pb.AppendEntryRequest) (*pb.
 	r.rpcCh.rpcAppendEntryRequestCh <- req
 	resp := <-r.rpcCh.rpcAppendEntryResponseCh
 	logDebug("rpcAppendEntryResponseCh resp:%v", resp)
+	return resp, nil
+}
+
+func (r *Rpc) ExecCommand(ctx context.Context, req *pb.ExecCommandRequest) (*pb.ExecCommandResponse, error) {
+	logDebug("start process append entry.\n")
+	// 将消息传送给channel
+	logDebug("AppendEntry(): ExecCommand request channel addr:%p", r.rpcCh.rpcExecCommandRequestCh)
+	r.rpcCh.rpcExecCommandRequestCh <- req
+	resp := <-r.rpcCh.rpcExecCommandResponseCh
+	logDebug("rpcExecCommandResponseCh resp:%v", resp)
 	return resp, nil
 }

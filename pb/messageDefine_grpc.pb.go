@@ -24,6 +24,7 @@ const _ = grpc.SupportPackageIsVersion7
 type RpcServiceClient interface {
 	RequestVote(ctx context.Context, in *RequestVoteRequest, opts ...grpc.CallOption) (*RequestVoteResponse, error)
 	AppendEntry(ctx context.Context, in *AppendEntryRequest, opts ...grpc.CallOption) (*AppendEntryResponse, error)
+	ExecCommand(ctx context.Context, in *ExecCommandRequest, opts ...grpc.CallOption) (*ExecCommandResponse, error)
 }
 
 type rpcServiceClient struct {
@@ -52,12 +53,22 @@ func (c *rpcServiceClient) AppendEntry(ctx context.Context, in *AppendEntryReque
 	return out, nil
 }
 
+func (c *rpcServiceClient) ExecCommand(ctx context.Context, in *ExecCommandRequest, opts ...grpc.CallOption) (*ExecCommandResponse, error) {
+	out := new(ExecCommandResponse)
+	err := c.cc.Invoke(ctx, "/raftlib.RpcService/ExecCommand", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // RpcServiceServer is the server API for RpcService service.
 // All implementations must embed UnimplementedRpcServiceServer
 // for forward compatibility
 type RpcServiceServer interface {
 	RequestVote(context.Context, *RequestVoteRequest) (*RequestVoteResponse, error)
 	AppendEntry(context.Context, *AppendEntryRequest) (*AppendEntryResponse, error)
+	ExecCommand(context.Context, *ExecCommandRequest) (*ExecCommandResponse, error)
 	mustEmbedUnimplementedRpcServiceServer()
 }
 
@@ -70,6 +81,9 @@ func (UnimplementedRpcServiceServer) RequestVote(context.Context, *RequestVoteRe
 }
 func (UnimplementedRpcServiceServer) AppendEntry(context.Context, *AppendEntryRequest) (*AppendEntryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method AppendEntry not implemented")
+}
+func (UnimplementedRpcServiceServer) ExecCommand(context.Context, *ExecCommandRequest) (*ExecCommandResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ExecCommand not implemented")
 }
 func (UnimplementedRpcServiceServer) mustEmbedUnimplementedRpcServiceServer() {}
 
@@ -120,6 +134,24 @@ func _RpcService_AppendEntry_Handler(srv interface{}, ctx context.Context, dec f
 	return interceptor(ctx, in, info, handler)
 }
 
+func _RpcService_ExecCommand_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ExecCommandRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(RpcServiceServer).ExecCommand(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/raftlib.RpcService/ExecCommand",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(RpcServiceServer).ExecCommand(ctx, req.(*ExecCommandRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // RpcService_ServiceDesc is the grpc.ServiceDesc for RpcService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -134,6 +166,10 @@ var RpcService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "AppendEntry",
 			Handler:    _RpcService_AppendEntry_Handler,
+		},
+		{
+			MethodName: "ExecCommand",
+			Handler:    _RpcService_ExecCommand_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

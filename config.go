@@ -2,13 +2,19 @@ package raftlib
 
 import "time"
 
+// 设置超时时间
 const (
 	// 心跳超时时间
 	HeartbeatTimeout = 1000 * time.Millisecond
 	// 选举超时时间
 	ElectionTimeout = 1000 * time.Millisecond
 	// RPC响应超时时间
-	RpcTimeout = 200 * time.Millisecond
+	RpcTimeout = 50000000 * time.Millisecond
+)
+
+// 设置最大数量
+const (
+	MAX_LOG_INDEX_NUM = 0xFFFFFFFF
 )
 
 // Servers: 服务器元信息列表
@@ -55,6 +61,8 @@ var (
 	RPOTO_VER_REQUEST_VOTE_RESPONSE uint32 = 1
 	RPOTO_VER_APPEND_ENTRY_REQUEST  uint32 = 1
 	RPOTO_VER_APPEND_ENTRY_RESPONSE uint32 = 1
+	PROTO_VER_EXEC_COMMAND_REQUEST  uint32 = 1
+	PROTO_VER_EXEC_COMMAND_RESPONSE uint32 = 1
 )
 
 // 是否启用Debug日志
@@ -65,4 +73,13 @@ const (
 // Dubug中需要打印的变量
 var (
 	isPrintRpcAppendEntryRequestCh = [2]bool{false, false}
+)
+
+// 定义回调函数
+var (
+	// 提交日志时用来执行command的回调函数
+	// TODO: 待处理
+	execCommandfunc func([]byte) error = func([]byte) error {
+		return nil
+	}
 )

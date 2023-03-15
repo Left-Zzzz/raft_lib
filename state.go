@@ -41,20 +41,14 @@ type raftState struct {
 	// 当前任期号，初始值0，单增
 	currentTerm uint64
 
-	// 当前任期内收到选票的candidateId，如果没有投给任何候选人则为空
-	votedFor uint64
-
-	// 最大日志提交索引号，初始值0，单增
-	commitIndex uint64
-
-	// 已经被应用到状态机的最高日志条目索引号，初始值0，单增
-	lastApplied uint64
+	// 最大日志提交索引号，初始值MAX_LOG_INDEX_NUM(-1)，单增
+	commitIndex uint32
 
 	// 保护一下两个参数的读写操作
 	lastLock sync.Mutex
 
-	// 缓存最新log Index/Term
-	lastLogIndex uint64
+	// 缓存最新log Index(初始值：MAX_LOG_INDEX_NUM(-1))/Term
+	lastLogIndex uint32
 	lastLogTerm  uint64
 
 	// 已投票给候选者中候选者最大任期号
@@ -82,7 +76,6 @@ func (r *raftState) setState(s RaftState) {
 // 获取当前任期
 func (r *raftState) getCurrentTerm() uint64 {
 	currentTerm := atomic.LoadUint64(&r.currentTerm)
-	logDebug("currentTerm: %v", currentTerm)
 	return currentTerm
 }
 
@@ -92,23 +85,24 @@ func (r *raftState) setCurrentTerm(term uint64) {
 }
 
 // 获取最后一次提交的索引号
-func (r *raftState) getCommitIndex() uint64 {
-	return atomic.LoadUint64(&r.commitIndex)
+func (r *raftState) getCommitIndex() uint32 {
+	return atomic.LoadUint32(&r.commitIndex)
+}
+
+func (r *raftState) getCurrentCommitIndex() uint32 {
+	index := atomic.LoadUint32(&r.commitIndex)
+	// 因为uint32中负一表示为MAX_LOG_INDEX_NUM,所以不能简单+1
+	if index == MAX_LOG_INDEX_NUM {
+		index = 0
+	} else {
+		index++
+	}
+	return index
 }
 
 // 设置最后一次提交的索引号
-func (r *raftState) setCommitIndex(index uint64) {
-	atomic.StoreUint64(&r.commitIndex, index)
-}
-
-// 获取最后一次引用日志的索引号
-func (r *raftState) getLastApplied() uint64 {
-	return atomic.LoadUint64(&r.lastApplied)
-}
-
-// 设置最后一次引用日志的索引号
-func (r *raftState) setLastApplied(index uint64) {
-	atomic.StoreUint64(&r.lastApplied, index)
+func (r *raftState) setCommitIndex(index uint32) {
+	atomic.StoreUint32(&r.commitIndex, index)
 }
 
 // 设置已投票给候选者中候选者最大任期号
@@ -136,8 +130,31 @@ func (r *raftState) waitShutdown() {
 }
 
 // 返回最后提交日志的索引号和任期
-func (r *raftState) getLastEntry() (uint64, uint64) {
+func (r *raftState) getLastEntry() (uint32, uint64) {
 	r.lastLock.Lock()
 	defer r.lastLock.Unlock()
 	return r.lastLogIndex, r.lastLogTerm
+}
+
+// 返回当前日志的索引号和任期
+func (r *raftState) getCurrentLogIndex() uint32 {
+	r.lastLock.Lock()
+	lastLogIndex := r.lastLogIndex
+	r.lastLock.Unlock()
+
+	// 因为uint32中负一表示为MAX_LOG_INDEX_NUM,所以不能简单+1
+	if lastLogIndex == MAX_LOG_INDEX_NUM {
+		lastLogIndex = 0
+	} else {
+		lastLogIndex++
+	}
+	return lastLogIndex
+}
+
+// 设置最后提交日志的索引号和任期
+func (r *raftState) setLastEntry(lastLogIndex uint32, lastLogTerm uint64) {
+	r.lastLock.Lock()
+	defer r.lastLock.Unlock()
+	r.lastLogIndex = lastLogIndex
+	r.lastLogTerm = lastLogTerm
 }

@@ -21,3 +21,28 @@ func TestAppendEntriesRpc(t *testing.T) {
 	resp := <-node.rpc.rpcCh.rpcAppendEntryResponseCh
 	logDebug("TestAppendEntriesRpc(), raft info, append entriy resp: %s", resp)
 }
+
+func TestExecCommand(t *testing.T) {
+	// 启动集群
+	nodes := RaftCreateCluster(t)
+	if len(nodes) == 0 {
+		t.Fatalf("nodes must greater than 0.")
+	}
+	nodes[0].raftState.state = Leader
+	nodes[0].raftState.currentTerm = 10
+	nodes[0].setLeader(Servers[0])
+	for _, node := range nodes {
+		go node.run()
+	}
+	// 构造请求结构体
+	req := &pb.ExecCommandRequest{
+		Ver:     &PROTO_VER_EXEC_COMMAND_REQUEST,
+		Command: []byte("I am command."),
+	}
+	nodes[0].rpc.rpcCh.rpcExecCommandRequestCh <- req
+	logInfo("req to rpcExecCommandRequestCh:%v", req)
+
+	resp := <-nodes[0].rpc.rpcCh.rpcExecCommandResponseCh
+	logInfo("resp from rpcExecCommandResponseCh:%v", resp)
+
+}

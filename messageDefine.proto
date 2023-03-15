@@ -5,16 +5,19 @@ option go_package = "./pb"; // 如果编译出现找不到go_package问题，建
 service RpcService{
     rpc RequestVote(requestVoteRequest) returns (requestVoteResponse);
     rpc AppendEntry(appendEntryRequest) returns (appendEntryResponse);
+    rpc ExecCommand(execCommandRequest) returns (execCommandResponse);
 }
 
+// 选举请求RPC
 message requestVoteRequest {
     optional uint32 Ver = 1;
     optional uint64 Term = 2;
     optional string CandidateId = 3;
-    optional uint64 LastLogIdx = 4;
+    optional uint32 LastLogIdx = 4;
     optional uint64 LastLogTerm = 5;
 }
 
+// 选举请求回复RPC
 message requestVoteResponse {
     optional uint32 Ver = 1;
     string VoterID = 2;
@@ -27,11 +30,11 @@ message appendEntryRequest {
     optional uint32 Ver = 1;
     uint64 LeaderTerm = 2;
     string LeaderID = 3;
-    uint64 PrevLogIndex = 4;
+    uint32 PrevLogIndex = 4;
     uint64 PrevLogTerm = 5;
-    uint64 LogType = 6;
-    optional bytes Entries = 7;
-    uint64 LeaderCommit = 8;
+    uint32 LogType = 6;
+    optional bytes Entry = 7;
+    uint32 LeaderCommit = 8;
 }
 
 // appendEntryResponse 参数意义参考Raft论文
@@ -39,4 +42,18 @@ message appendEntryResponse {
     optional uint32 Ver = 1;
     uint64 Term = 2;
     bool Success = 3;
+}
+
+// 客户端向Raft集群发送执行命令请求，请求报文
+message execCommandRequest {
+    optional uint32 Ver = 1;
+    bytes Command = 2;
+}
+
+// 客户端向Raft集群发送执行命令请求，响应报文
+message execCommandResponse {
+    optional uint32 Ver = 1;
+    string LeaderAddress = 2;
+    string LeaderPort = 3;
+    bool Success = 4;
 }

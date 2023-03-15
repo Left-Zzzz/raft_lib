@@ -30,7 +30,7 @@ type Raft struct {
 	// log存储介质
 	storage LogStorage
 
-	// 最近一次介绍RPC
+	// 最近一次RPC时间
 	lastContact     time.Time
 	lastContactLock sync.RWMutex
 
@@ -82,8 +82,11 @@ func createRaft(server Server, raft_node_num uint64) *Raft {
 		localAddr: server.Address,
 		localPort: server.Port,
 		nodeNum:   raft_node_num,
-		raftState: &raftState{},
 		storage:   LogStorage{},
+		raftState: &raftState{
+			commitIndex:  MAX_LOG_INDEX_NUM,
+			lastLogIndex: MAX_LOG_INDEX_NUM,
+		},
 	}
 
 	r.setLeader(Server{})

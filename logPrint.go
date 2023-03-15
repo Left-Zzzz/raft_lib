@@ -23,6 +23,15 @@ func logInfo(format string, v ...any) {
 	}
 }
 
+// 输出警告日志
+func logWarn(format string, v ...any) {
+	if v != nil {
+		log.Printf("[Warn] "+format, v...)
+	} else {
+		log.Printf("[Warn] " + format)
+	}
+}
+
 // 输出错误日志
 func logError(format string, v ...any) {
 	if v != nil {

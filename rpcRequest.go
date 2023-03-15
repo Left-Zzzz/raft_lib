@@ -3,7 +3,6 @@ package raftlib
 import (
 	"context"
 	"raft_lib/pb"
-	"time"
 )
 
 // RequestVote RPC请求流程
@@ -18,7 +17,9 @@ func (r *Rpc) RequestVoteRequest(
 
 	ctx := context.Background()
 	var resp *pb.RequestVoteResponse
+	r.clientsMutex.Lock()
 	resp, err = r.clients[peer.ID].RequestVote(ctx, req)
+	r.clientsMutex.Unlock()
 	if err != nil {
 		logError(": An error occured while calling RequestVoteRPC: ", err)
 		return nil, err
@@ -38,13 +39,15 @@ func (r *Rpc) AppendEntryRequest(
 	logDebug("start send append entry request.\n")
 
 	// 设置超时
-	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	ctx, cancel := context.WithTimeout(context.Background(), RpcTimeout)
 	defer cancel()
 
 	var resp *pb.AppendEntryResponse
+	r.clientsMutex.Lock()
 	resp, err = r.clients[peer.ID].AppendEntry(ctx, req)
+	r.clientsMutex.Unlock()
 	if err != nil {
-		logError(": An error occured while calling AppendEntryRPC: ", err)
+		logError(": An error occured while calling AppendEntryRPC:%v", err)
 		return nil, err
 	}
 
