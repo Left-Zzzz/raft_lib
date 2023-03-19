@@ -348,8 +348,19 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 			logDebug("execCommand(): recieve sucess response. success count:%v, success required:%v", successCnt, leastSuccessRequired)
 			// 成功响应的节点超过一半
 			if successCnt >= int(leastSuccessRequired) {
+				// 从map中拿到回调函数
+				cbFunc, ok := r.storage.callBackFuncMap.Load(execCommandFuncName)
+				if !ok {
+					logError("callBackFunc load %v falied!", execCommandFuncName)
+					return resp
+				}
+				execCommandFunc, ok := cbFunc.(func([]byte) error)
+				if !ok {
+					logError("cbFunc transfer type (func([]byte) error) failed!")
+					return resp
+				}
 				// TODO: 执行entry中的命令
-				err := r.storage.commit(r.getCurrentCommitIndex(), execCommandfunc)
+				err := r.storage.commit(r.getCurrentCommitIndex(), execCommandFunc)
 				if err != nil {
 					logError("r.storage.commit(): %v", err)
 					return resp

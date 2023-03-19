@@ -82,9 +82,20 @@ func (r *Raft) appendEntry(req *pb.AppendEntryRequest) (resp *pb.AppendEntryResp
 			} else {
 				curCommitIndex = lastCommitIndex + 1
 			}
-
+			// 从map中获取应用日志的回调函数
+			cbFunc, ok := r.storage.callBackFuncMap.Load(execCommandFuncName)
+			if !ok {
+				logError("callBackFunc load %v falied!", execCommandFuncName)
+				return
+			}
+			execCommandFunc, ok := cbFunc.(func([]byte) error)
+			if !ok {
+				logError("cbFunc transfer type (func([]byte) error) failed!")
+				return
+			}
+			// 应用日志
 			for index := curCommitIndex; index <= leaderCommitIndex; index++ {
-				err := r.storage.commit(index, execCommandfunc)
+				err := r.storage.commit(index, execCommandFunc)
 				if err != nil {
 					logError("r.storage.commit():%v", err)
 					break

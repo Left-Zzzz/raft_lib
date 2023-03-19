@@ -1,6 +1,8 @@
 package raftlib
 
-import "time"
+import (
+	"time"
+)
 
 // 设置超时时间
 const (
@@ -75,11 +77,7 @@ var (
 	isPrintRpcAppendEntryRequestCh = [2]bool{false, false}
 )
 
-// 定义回调函数
-var (
-	// 提交日志时用来执行command的回调函数
-	// TODO: 待处理
-	execCommandfunc func([]byte) error = func([]byte) error {
-		return nil
-	}
+// 定义应用日志的回调函数名字
+const (
+	execCommandFuncName string = "execCommandFunc"
 )
