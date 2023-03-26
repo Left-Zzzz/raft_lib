@@ -11,7 +11,7 @@ func TestRaftCreateCluster(t *testing.T) {
 	nodes := RaftCreateCluster(t)
 	// 测试raft节点初始状态
 	for _, node := range nodes {
-		// leader_id初始值必须为空字符串
+		// leaderID初始值必须为空字符串
 		if node.Leader() != "" {
 			t.Fatalf("node's initial leader_id should be \"\"(empty string)\n")
 		}

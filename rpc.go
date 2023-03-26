@@ -65,8 +65,8 @@ func (r *Rpc) createRpcServer(raft *Raft) (*grpc.Server, error) {
 // 启动rpc服务器
 func (r *Rpc) runRpcServer(s *grpc.Server, port ServerPort) {
 	// 监听本地 port 端口
-	port_formed := string(":" + port)
-	listen, err := net.Listen("tcp", port_formed)
+	portFormed := string(":" + port)
+	listen, err := net.Listen("tcp", portFormed)
 	if err != nil {
 		panic(err)
 	}

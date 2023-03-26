@@ -13,3 +13,14 @@ func randomTimeout(minVal time.Duration) <-chan time.Time {
 	extra := time.Duration(rand.Int63()) % minVal
 	return time.After(minVal + extra)
 }
+
+// 根据传参的index生成后一位index
+func genNextLogIndex(index uint32) uint32 {
+	// 因为uint32中负一表示为MAX_LOG_INDEX_NUM,所以不能简单+1
+	if index == MAX_LOG_INDEX_NUM {
+		index = 0
+	} else {
+		index++
+	}
+	return index
+}

@@ -82,7 +82,7 @@ func createRaft(server Server, raft_node_num uint64) *Raft {
 		localAddr: server.Address,
 		localPort: server.Port,
 		nodeNum:   raft_node_num,
-		storage:   LogStorage{},
+		storage:   *createLogStorage(),
 		raftState: &raftState{
 			commitIndex:  MAX_LOG_INDEX_NUM,
 			lastLogIndex: MAX_LOG_INDEX_NUM,

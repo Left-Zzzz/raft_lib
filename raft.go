@@ -1,7 +1,6 @@
 package raftlib
 
 import (
-	"encoding/json"
 	"raft_lib/pb"
 	"strconv"
 	"time"
@@ -86,9 +85,16 @@ func (r *Raft) runCandidate() {
 			if vote.GetTerm() > curTerm {
 				r.setState(Follower)
 			}
-			// 收到拒绝投票，直接continue
+			// 收到拒绝投票，查看对方日志是否是最新的
 			if !vote.GetVoteGranted() {
 				logDebug("recieve an vote reject from id:%s, term:%d.\n", vote.VoterID, vote.Term)
+				// 如果是最新的，则raftState回退至follower
+				lastLogIdx, lastLogTerm := r.getLastEntry()
+				if lastLogIdx < vote.GetLastLogIdx() || lastLogTerm < vote.GetLastLogTerm() {
+					r.setState(Follower)
+					continue
+				}
+				// 如果不是最新的，则continue
 				continue
 			}
 			logDebug("recieve an vote agree from id:%s, term:%d.\n", vote.VoterID, vote.Term)
@@ -177,12 +183,12 @@ func (r *Raft) electSelf() <-chan *pb.RequestVoteResponse {
 
 	// 构造RPC请求message
 	curTerm := r.getCurrentTerm()
-	lastIdx, lastTerm := r.getLastEntry()
+	lastLogIdx, lastLogTerm := r.getLastEntry()
 	req := &pb.RequestVoteRequest{
-		Term:        &curTerm,
-		CandidateId: (*string)(&r.localID),
-		LastLogIdx:  &lastIdx,
-		LastLogTerm: &lastTerm,
+		Term:        curTerm,
+		CandidateId: string(r.localID),
+		LastLogIdx:  lastLogIdx,
+		LastLogTerm: lastLogTerm,
 	}
 
 	// 构造选举请求函数，构造responseMessage
@@ -194,8 +200,8 @@ func (r *Raft) electSelf() <-chan *pb.RequestVoteResponse {
 				logError("failed to make requestVote RPC",
 					"target", peer,
 					"error", err,
-					"term", *(req.Term))
-				resp.Term = *(req.Term)
+					"term", req.Term)
+				resp.Term = req.Term
 				resp.VoteGranted = false
 			}
 			respCh <- resp
@@ -211,12 +217,12 @@ func (r *Raft) electSelf() <-chan *pb.RequestVoteResponse {
 				logDebug("voting for self, term:%v, localID:%d", r.getCurrentTerm(), r.localID)
 				// 自己给自己一票
 				respCh <- &pb.RequestVoteResponse{
-					Term:        *(req.Term),
+					Term:        req.Term,
 					VoteGranted: true,
 					VoterID:     string(r.localID),
 				}
 			} else {
-				logDebug("asking for vote, term:%v, from:%v, address:%v", *req.Term, server.ID, server.Address)
+				logDebug("asking for vote, term:%v, from:%v, address:%v", req.Term, server.ID, server.Address)
 				go askPeer(server)
 			}
 		}
@@ -253,129 +259,4 @@ func (r *Raft) sendHeartBeatLoop() {
 		heartBeatTimer = time.After(senHeartBeatInterval)
 	}
 
-}
-
-func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
-	// 获取leader的address和port
-	localID := r.getLocalID()
-	leaderID := r.Leader()
-	leaderAddress := ""
-	leaderPort := ""
-	for _, server := range Servers {
-		logInfo("server.ID:%v, leaderID:%v", server.ID, leaderID)
-		if server.ID == leaderID {
-			leaderAddress = string(server.Address)
-			leaderPort = string(server.Port)
-			logInfo("execCommand(), leaderAddress:%v, leaderPort:%v", string(server.Address), string(server.Port))
-			break
-		}
-	}
-
-	// 构造ExecCommandResponse
-	resp := &pb.ExecCommandResponse{
-		Ver:           &PROTO_VER_EXEC_COMMAND_RESPONSE,
-		LeaderAddress: leaderAddress,
-		LeaderPort:    leaderPort,
-		Success:       false,
-	}
-
-	// 如果被请求的节点不是leader节点，返回leader所在地址
-	if localID != leaderID {
-		return resp
-	}
-
-	// 构造AppendEntry请求
-	prevLogIndex, prvLogTerm := r.getLastEntry()
-	currentTerm := r.getCurrentTerm()
-	appendEntryResponseCh := make(chan *pb.AppendEntryResponse)
-	logEntryEncoded, _ := json.Marshal(&Log{
-		Index:   prevLogIndex + 1,
-		Term:    r.getCurrentTerm(),
-		LogType: LogCommand,
-		Data:    req.Command,
-	})
-	appendEntryReq := &pb.AppendEntryRequest{
-		Ver:          &RPOTO_VER_APPEND_ENTRY_REQUEST,
-		LeaderTerm:   r.getCurrentTerm(),
-		LeaderID:     string(r.Leader()),
-		PrevLogIndex: prevLogIndex,
-		PrevLogTerm:  prvLogTerm,
-		Entry:        logEntryEncoded,
-		LeaderCommit: r.getCommitIndex(),
-		LogType:      uint32(LogCommand),
-	}
-	// AppendEntryRPC通信流程
-	askPeer := func(peer Server) {
-		r.goFunc(func() {
-			var isFirstTimeLoop bool = true
-			var err error
-			var resp *pb.AppendEntryResponse
-			// 循环发送直到被接收回复为止
-			for isFirstTimeLoop || err != nil {
-				isFirstTimeLoop = false
-				resp, err = r.rpc.AppendEntryRequest(peer, appendEntryReq)
-			}
-			appendEntryResponseCh <- resp
-		})
-	}
-	// 创建协程发送请求
-	for _, node := range Servers {
-		// 忽略自己
-		if node.ID == r.getLocalID() {
-			continue
-		}
-		askPeer(node)
-	}
-
-	// 监听投票结果
-	successCnt := 0
-	leastSuccessRequired := r.getNodeNum()/2 + 1
-	// 自己执行appendEntry操作
-	localResp := r.appendEntry(appendEntryReq)
-	// 如果leader节点都不能处理AppendEntry请求，返回错误
-	if !localResp.GetSuccess() {
-		return resp
-	}
-	// 更新上一个添加的日志项信息缓存
-	r.setLastEntry(r.getCurrentLogIndex(), currentTerm)
-	// 加上leader节点的一票
-	successCnt++
-	for {
-		ch := <-appendEntryResponseCh
-		// 如果收到成功响应消息
-		if ch.GetSuccess() {
-			successCnt++
-			logDebug("execCommand(): recieve sucess response. success count:%v, success required:%v", successCnt, leastSuccessRequired)
-			// 成功响应的节点超过一半
-			if successCnt >= int(leastSuccessRequired) {
-				// 从map中拿到回调函数
-				cbFunc, ok := r.storage.callBackFuncMap.Load(execCommandFuncName)
-				if !ok {
-					logError("callBackFunc load %v falied!", execCommandFuncName)
-					return resp
-				}
-				execCommandFunc, ok := cbFunc.(func([]byte) error)
-				if !ok {
-					logError("cbFunc transfer type (func([]byte) error) failed!")
-					return resp
-				}
-				// TODO: 执行entry中的命令
-				err := r.storage.commit(r.getCurrentCommitIndex(), execCommandFunc)
-				if err != nil {
-					logError("r.storage.commit(): %v", err)
-					return resp
-				}
-				// 打印输出已提交的日志项的信息
-				debugLogEntry := r.storage.getEntry(r.getCurrentCommitIndex())
-				logDebug("r.storage.getEntry(%v): %v, command:%v", r.getCommitIndex(), debugLogEntry, string(debugLogEntry.Data))
-				// 执行完成，更新CommitIndex
-				r.setCommitIndex(r.getCurrentCommitIndex())
-
-				// 回复成功响应
-				logDebug("execCommand(): recieve over half success, repsonce true and exec command.")
-				resp.Success = true
-				return resp
-			}
-		}
-	}
 }

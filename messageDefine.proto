@@ -11,10 +11,10 @@ service RpcService{
 // 选举请求RPC
 message requestVoteRequest {
     optional uint32 Ver = 1;
-    optional uint64 Term = 2;
-    optional string CandidateId = 3;
-    optional uint32 LastLogIdx = 4;
-    optional uint64 LastLogTerm = 5;
+    uint64 Term = 2;
+    string CandidateId = 3;
+    uint32 LastLogIdx = 4;
+    uint64 LastLogTerm = 5;
 }
 
 // 选举请求回复RPC
@@ -22,7 +22,11 @@ message requestVoteResponse {
     optional uint32 Ver = 1;
     string VoterID = 2;
     uint64 Term = 3;
-    bool VoteGranted = 4;
+    // 安全补丁，保证leader日志时最新的
+    // candidate 收到比他日志还新的回复就会将自己转换为follower
+    uint32 LastLogIdx = 4;
+    uint64 LastLogTerm = 5;
+    bool VoteGranted = 6;
 }
 
 // appendEntryRequest 参数意义参考Raft论文
