@@ -25,6 +25,15 @@ var Servers = []Server{
 	{Voter, "1", "127.0.0.1", "5679"},
 }
 
+// 记录本地服务器
+var localServer Server = Servers[0]
+
+// ClientAddress : 网络ip地址
+type ClientAddress string
+
+// ClientPort : 网络端口
+type ClientPort string
+
 // ServerAddress : 网络ip地址
 type ServerAddress string
 

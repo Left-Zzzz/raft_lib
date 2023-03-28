@@ -51,7 +51,8 @@ message appendEntryResponse {
 // 客户端向Raft集群发送执行命令请求，请求报文
 message execCommandRequest {
     optional uint32 Ver = 1;
-    bytes Command = 2;
+    uint32 LogType = 2;
+    bytes Command = 3;
 }
 
 // 客户端向Raft集群发送执行命令请求，响应报文

@@ -85,6 +85,10 @@ func (r *Raft) runCandidate() {
 			if vote.GetTerm() > curTerm {
 				r.setState(Follower)
 			}
+
+			// 安全性补丁：判断日志是否是最新的，如果不是最新的话，candidate节点回退至follower
+			// 这样做法是保证日志是安全的，不会被日志少的节点当选leader，进而造成已提交日志被覆盖情况
+
 			// 收到拒绝投票，查看对方日志是否是最新的
 			if !vote.GetVoteGranted() {
 				logDebug("recieve an vote reject from id:%s, term:%d.\n", vote.VoterID, vote.Term)
@@ -118,7 +122,11 @@ func (r *Raft) runCandidate() {
 }
 
 func (r *Raft) runLeader() {
-	// TODO:发送当选leader通知
+	// 安全性补丁：NoOp补丁，leader提交非自身任期的日志是十分危险的，会导致已提交日志被覆盖
+	// 所以leader节点只能提交自身任期的日志，而NoOp补丁既可以提交自身日志，又能将旧日志安全提交
+	r.noOp()
+
+	// 发送当选leader通知
 	go r.sendHeartBeatLoop()
 	for r.getState() == Leader {
 		// 处理RPC请求
@@ -259,4 +267,18 @@ func (r *Raft) sendHeartBeatLoop() {
 		heartBeatTimer = time.After(senHeartBeatInterval)
 	}
 
+}
+
+// NoOp补丁，提交空日志
+func (r *Raft) noOp() {
+	// 直接复用execCommand
+	req := &pb.ExecCommandRequest{
+		Ver:     &PROTO_VER_EXEC_COMMAND_REQUEST,
+		LogType: uint32(LogNoOp),
+		Command: []byte(""),
+	}
+	resp := r.execCommand(req)
+	if !resp.GetSuccess() {
+		logWarn("r.execCommand(): failed. leaderAddress:%v, leaderPort:%v", resp.GetLeaderAddress(), resp.GetLeaderPort())
+	}
 }

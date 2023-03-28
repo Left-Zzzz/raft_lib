@@ -59,11 +59,14 @@ func (ls *LogStorage) appendEntryEncoded(index uint32, entryEncode []byte) error
 // 获得日志
 func (ls *LogStorage) getEntry(index uint32) (Log, error) {
 	ls.entriesLock.RLock()
-	if uint32(len(ls.entries)) <= index {
+	defer ls.entriesLock.RUnlock()
+	entriesLen := uint32(len(ls.entries))
+	logDebug("getEntry(): entriesLen:%v, index:%v", entriesLen, index)
+	if entriesLen <= index {
 		return Log{}, errors.New("param \"index\" is larger than len of entries")
 	}
 	rowData := ls.entries[index]
-	ls.entriesLock.RUnlock()
+
 	logEntry := Log{}
 	json.Unmarshal(rowData, &logEntry)
 	return logEntry, nil
@@ -73,6 +76,7 @@ func (ls *LogStorage) getEntry(index uint32) (Log, error) {
 func (ls *LogStorage) isIdxTermCorrect(index uint32, term uint64) bool {
 	// 如果为没有上一个日志项，则不用检验任期，返回正确
 	if index == MAX_LOG_INDEX_NUM {
+		logDebug("isIdxTermCorrect(): prevLogIndex is MAX_LOG_INDEX_NUM, return.")
 		return true
 	}
 	entry, err := ls.getEntry(index)

@@ -67,7 +67,8 @@ func TestExecCommand(t *testing.T) {
 	}
 	// 构造请求结构体
 	req := &pb.ExecCommandRequest{
-		Ver: &PROTO_VER_EXEC_COMMAND_REQUEST,
+		Ver:     &PROTO_VER_EXEC_COMMAND_REQUEST,
+		LogType: uint32(LogCommand),
 	}
 	for _, data := range datas {
 		req.Command = []byte(data)

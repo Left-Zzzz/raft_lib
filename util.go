@@ -24,3 +24,14 @@ func genNextLogIndex(index uint32) uint32 {
 	}
 	return index
 }
+
+// 根据传参的index生成前一位index
+func genPrevLogIndex(index uint32) uint32 {
+	// 因为uint32中负一表示为MAX_LOG_INDEX_NUM,所以不能简单-1
+	if index == 0 || index == MAX_LOG_INDEX_NUM {
+		index = MAX_LOG_INDEX_NUM
+	} else {
+		index--
+	}
+	return index
+}
