@@ -58,7 +58,8 @@ message execCommandRequest {
 // 客户端向Raft集群发送执行命令请求，响应报文
 message execCommandResponse {
     optional uint32 Ver = 1;
-    string LeaderAddress = 2;
-    string LeaderPort = 3;
-    bool Success = 4;
+    string LeaderID = 2;
+    string LeaderAddress = 3;
+    string LeaderPort = 4;
+    bool Success = 5;
 }

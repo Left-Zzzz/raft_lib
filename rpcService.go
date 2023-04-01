@@ -79,6 +79,7 @@ func (r *Raft) appendEntry(req *pb.AppendEntryRequest) (resp *pb.AppendEntryResp
 	commitEntries := func() {
 		r.goFunc(func() {
 			leaderCommitIndex := req.GetLeaderCommit()
+			logDebug("commitEntries(): leaderCommitIndex:%v", leaderCommitIndex)
 			if leaderCommitIndex == MAX_LOG_INDEX_NUM {
 				// 没有日志提交，返回
 				return
@@ -175,6 +176,7 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 	// 构造ExecCommandResponse
 	resp := &pb.ExecCommandResponse{
 		Ver:           &PROTO_VER_EXEC_COMMAND_RESPONSE,
+		LeaderID:      string(leaderID),
 		LeaderAddress: leaderAddress,
 		LeaderPort:    leaderPort,
 		Success:       false,
@@ -182,6 +184,7 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 
 	// 如果被请求的节点不是leader节点，返回leader所在地址
 	if localID != leaderID {
+		logDebug("localID(%v) != leaderID(%v), localAddr:%v, localPort:%v, return false.", localID, leaderID, r.localAddr, r.localPort)
 		return resp
 	}
 
@@ -335,21 +338,23 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 					logError("cbFunc transfer type (func([]byte) error) failed!")
 					return resp
 				}
-				// 执行entry中的命令
-				err := r.storage.commit(genNextLogIndex(r.getCurrentCommitIndex()), execCommandFunc)
-				if err != nil {
-					logError("r.storage.commit(): %v, index:%v", err, r.getCurrentCommitIndex())
-					return resp
+				// 执行entry中的命令, 将未提交的entry一并提交
+				for currentCommitIndex := r.getCurrentCommitIndex(); currentCommitIndex != currentLogIndex; currentCommitIndex = genNextLogIndex(currentCommitIndex) {
+					err := r.storage.commit(genNextLogIndex(currentCommitIndex), execCommandFunc)
+					if err != nil {
+						logError("r.storage.commit(): %v, index:%v", err, currentCommitIndex)
+						return resp
+					}
+					// 打印输出已提交的日志项的信息
+					debugLogEntry, err := r.storage.getEntry(currentCommitIndex)
+					if err != nil {
+						logError("r.storage.getEntry(): %v", err)
+						return resp
+					}
+					logDebug("r.storage.getEntry(%v): %v, command:%v", r.getCommitIndex(), debugLogEntry, string(debugLogEntry.Data))
+					// 执行完成，更新CommitIndex
+					r.setCommitIndex(genNextLogIndex(currentCommitIndex))
 				}
-				// 打印输出已提交的日志项的信息
-				debugLogEntry, err := r.storage.getEntry(r.getCurrentCommitIndex())
-				if err != nil {
-					logError("r.storage.getEntry(): %v", err)
-					return resp
-				}
-				logDebug("r.storage.getEntry(%v): %v, command:%v", r.getCommitIndex(), debugLogEntry, string(debugLogEntry.Data))
-				// 执行完成，更新CommitIndex
-				r.setCommitIndex(r.getCurrentCommitIndex())
 
 				// 回复成功响应
 				logDebug("execCommand(): recieve over half success, repsonce true and exec command.")

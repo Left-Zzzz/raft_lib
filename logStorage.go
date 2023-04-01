@@ -104,6 +104,7 @@ func (ls *LogStorage) commit(index uint32, execFunc func([]byte) error) error {
 	// 如果不发生错误，更新提交日志索引
 	if err == nil {
 		ls.setCommitIndex(index)
+		logDebug("LogStorage.commit(): commitIndex: %v", index)
 	}
 	return err
 }
