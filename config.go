@@ -4,29 +4,60 @@ import (
 	"time"
 )
 
-// 设置超时时间
-const (
+// 可配置参数
+var config *Config = createConfig()
+
+type Config struct {
+	// 是否启用日志
+	DEBUG bool
+
+	// 设置超时时间
 	// 心跳超时时间
-	HeartbeatTimeout = 1000 * time.Millisecond
+	HeartbeatTimeout time.Duration
 	// 选举超时时间
-	ElectionTimeout = 1000 * time.Millisecond
+	ElectionTimeout time.Duration
 	// RPC响应超时时间
-	RpcTimeout = 50000000 * time.Millisecond
-)
+	RpcTimeout time.Duration
 
-// 设置最大数量
-const (
-	MAX_LOG_INDEX_NUM = 0xFFFFFFFF
-)
-
-// Servers: 服务器元信息列表
-var Servers = []Server{
-	{Voter, "0", "127.0.0.1", "5676"},
-	{Voter, "1", "127.0.0.1", "5677"},
+	// Servers: 服务器元信息列表
+	Servers []Server
 }
 
-// 记录本地服务器
-var localServer Server = Servers[0]
+func createConfig() *Config {
+	config := &Config{
+		DEBUG:            true,
+		HeartbeatTimeout: 1000 * time.Millisecond,
+		ElectionTimeout:  1000 * time.Millisecond,
+		RpcTimeout:       50000000 * time.Millisecond,
+		Servers: []Server{
+			{Voter, "0", "127.0.0.1", "5676"},
+			{Voter, "1", "127.0.0.1", "5677"},
+		},
+	}
+	return config
+}
+
+const (
+	// rpc proto版本号
+	RPOTO_VER_REQUEST_VOTE_REQUEST  uint32 = 1
+	RPOTO_VER_REQUEST_VOTE_RESPONSE uint32 = 1
+	RPOTO_VER_APPEND_ENTRY_REQUEST  uint32 = 1
+	RPOTO_VER_APPEND_ENTRY_RESPONSE uint32 = 1
+	PROTO_VER_EXEC_COMMAND_REQUEST  uint32 = 1
+	PROTO_VER_EXEC_COMMAND_RESPONSE uint32 = 1
+
+	// 日志相关
+	// 设置最大日志项数量
+	MAX_LOG_INDEX_NUM = 0xFFFFFFFF
+	// 定义应用日志的回调函数名字
+	EXEC_COMMAND_FUNC_NAME string = "execCommandFunc"
+
+	// ServerSuffrage类型(暂不使用)
+	// Voter：集群成员变更时，当节点日志纪录追上领导者节点时候，具有Voter权限
+	Voter ServerSuffrage = 0
+	// Nonvoter：集群成员变更时，当节点正在纪录日志且日志未追上领导者节点时，不具有Voter权限
+	Nonvoter ServerSuffrage = 1
+)
 
 // ClientAddress : 网络ip地址
 type ClientAddress string
@@ -46,14 +77,6 @@ type ServerID string
 // ServerSuffrage: 表示节点是否获得投票
 type ServerSuffrage int
 
-// ServerSuffrage类型
-const (
-	// Voter：集群成员变更时，当节点日志纪录追上领导者节点时候，具有Voter权限
-	Voter ServerSuffrage = iota
-	// Nonvoter：集群成员变更时，当节点正在纪录日志且日志未追上领导者节点时，不具有Voter权限
-	Nonvoter
-)
-
 // Server: 服务器元信息
 type Server struct {
 	// Suffrage: 表示节点是否获得投票
@@ -65,28 +88,3 @@ type Server struct {
 	// Port: 服务器端口号
 	Port ServerPort
 }
-
-// rpc proto版本号
-var (
-	RPOTO_VER_REQUEST_VOTE_REQUEST  uint32 = 1
-	RPOTO_VER_REQUEST_VOTE_RESPONSE uint32 = 1
-	RPOTO_VER_APPEND_ENTRY_REQUEST  uint32 = 1
-	RPOTO_VER_APPEND_ENTRY_RESPONSE uint32 = 1
-	PROTO_VER_EXEC_COMMAND_REQUEST  uint32 = 1
-	PROTO_VER_EXEC_COMMAND_RESPONSE uint32 = 1
-)
-
-// 是否启用Debug日志
-const (
-	DEBUG = true
-)
-
-// Dubug中需要打印的变量
-var (
-	isPrintRpcAppendEntryRequestCh = [2]bool{false, false}
-)
-
-// 定义应用日志的回调函数名字
-const (
-	execCommandFuncName string = "execCommandFunc"
-)

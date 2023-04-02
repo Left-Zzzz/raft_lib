@@ -17,10 +17,10 @@ func TestAppendEntriesRpc(t *testing.T) {
 	node := nodes[0]
 	go node.run()
 	logDebug("TestAppendEntriesRpc(), raft info, append entriy addr:%p", node.rpc.rpcCh.rpcAppendEntryRequestCh)
-	isPrintRpcAppendEntryRequestCh[0] = false
 	datas := [4]string{"I am command1.", "I am command2.", "I am command3.", "I am command4."}
+	ver := RPOTO_VER_APPEND_ENTRY_REQUEST
 	req := &pb.AppendEntryRequest{
-		Ver:          &RPOTO_VER_APPEND_ENTRY_REQUEST,
+		Ver:          &ver,
 		LeaderTerm:   1,
 		LeaderID:     "0",
 		PrevLogIndex: MAX_LOG_INDEX_NUM,
@@ -61,13 +61,14 @@ func TestExecCommand(t *testing.T) {
 	nodes[0].storage.registerCallBackFunc(cbFunc)
 	nodes[0].raftState.state = Leader
 	nodes[0].raftState.currentTerm = 10
-	nodes[0].setLeader(Servers[0])
+	nodes[0].setLeader(config.Servers[0])
 	for _, node := range nodes {
 		go node.run()
 	}
 	// 构造请求结构体
+	ver := PROTO_VER_EXEC_COMMAND_REQUEST
 	req := &pb.ExecCommandRequest{
-		Ver:     &PROTO_VER_EXEC_COMMAND_REQUEST,
+		Ver:     &ver,
 		LogType: uint32(LogCommand),
 	}
 	for _, data := range datas {

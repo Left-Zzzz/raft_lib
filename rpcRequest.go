@@ -39,7 +39,7 @@ func (r *Rpc) AppendEntryRequest(
 	logDebug("start send append entry request.\n")
 
 	// 设置超时
-	ctx, cancel := context.WithTimeout(context.Background(), RpcTimeout)
+	ctx, cancel := context.WithTimeout(context.Background(), config.RpcTimeout)
 	defer cancel()
 
 	var resp *pb.AppendEntryResponse

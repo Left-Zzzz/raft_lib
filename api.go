@@ -108,3 +108,7 @@ func createRaft(server Server, raft_node_num uint64) *Raft {
 	logDebug("createRaft(): rpcCh:%v", r.rpc.rpcCh)
 	return r
 }
+
+func (r *Raft) registerCallBackFunc(f func([]byte) error) {
+	r.storage.callBackFuncMap.Store(EXEC_COMMAND_FUNC_NAME, f)
+}

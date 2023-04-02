@@ -7,8 +7,9 @@ import (
 
 // Raft层 requestVoteRPC 处理逻辑
 func (r *Raft) requestVote(req *pb.RequestVoteRequest) (resp *pb.RequestVoteResponse) {
+	ver := RPOTO_VER_REQUEST_VOTE_RESPONSE
 	resp = &pb.RequestVoteResponse{
-		Ver:         &RPOTO_VER_REQUEST_VOTE_RESPONSE,
+		Ver:         &ver,
 		Term:        r.getCurrentTerm(),
 		VoteGranted: false,
 	}
@@ -85,9 +86,9 @@ func (r *Raft) appendEntry(req *pb.AppendEntryRequest) (resp *pb.AppendEntryResp
 				return
 			}
 			// 从map中获取应用日志的回调函数
-			cbFunc, ok := r.storage.callBackFuncMap.Load(execCommandFuncName)
+			cbFunc, ok := r.storage.callBackFuncMap.Load(EXEC_COMMAND_FUNC_NAME)
 			if !ok {
-				logError("callBackFunc load %v falied!", execCommandFuncName)
+				logError("callBackFunc load %v falied!", EXEC_COMMAND_FUNC_NAME)
 				return
 			}
 			execCommandFunc, ok := cbFunc.(func([]byte) error)
@@ -163,7 +164,7 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 	leaderID := r.Leader()
 	leaderAddress := ""
 	leaderPort := ""
-	for _, server := range Servers {
+	for _, server := range config.Servers {
 		logInfo("server.ID:%v, leaderID:%v", server.ID, leaderID)
 		if server.ID == leaderID {
 			leaderAddress = string(server.Address)
@@ -174,8 +175,9 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 	}
 
 	// 构造ExecCommandResponse
+	ver := PROTO_VER_EXEC_COMMAND_RESPONSE
 	resp := &pb.ExecCommandResponse{
-		Ver:           &PROTO_VER_EXEC_COMMAND_RESPONSE,
+		Ver:           &ver,
 		LeaderID:      string(leaderID),
 		LeaderAddress: leaderAddress,
 		LeaderPort:    leaderPort,
@@ -214,8 +216,9 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 			prevLogTerm = prevLogEntry.Term
 		}
 		logDebug("genAppendEntryRequest(): prevLogIndex: %v, prevLogTerm: %v", prevLogIndex, prevLogTerm)
+		ver := RPOTO_VER_APPEND_ENTRY_REQUEST
 		return &pb.AppendEntryRequest{
-			Ver:          &RPOTO_VER_APPEND_ENTRY_REQUEST,
+			Ver:          &ver,
 			LeaderTerm:   currentTerm,
 			LeaderID:     string(r.Leader()),
 			PrevLogIndex: prevLogIndex,
@@ -290,8 +293,9 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 	successCnt := 0
 	leastSuccessRequired := r.getNodeNum()/2 + 1
 	// leader节点自己执行appendEntry操作
+	ver = RPOTO_VER_APPEND_ENTRY_REQUEST
 	appendEntryReq := &pb.AppendEntryRequest{
-		Ver:          &RPOTO_VER_APPEND_ENTRY_REQUEST,
+		Ver:          &ver,
 		LeaderTerm:   currentTerm,
 		LeaderID:     string(r.Leader()),
 		PrevLogIndex: prevLogIndex,
@@ -311,7 +315,7 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 	successCnt++
 
 	// 创建协程向其他节点发送请求
-	for _, node := range Servers {
+	for _, node := range config.Servers {
 		// 忽略自己
 		if node.ID == r.getLocalID() {
 			continue
@@ -328,9 +332,9 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 			// 成功响应的节点超过一半
 			if successCnt >= int(leastSuccessRequired) {
 				// 从map中拿到回调函数
-				cbFunc, ok := r.storage.callBackFuncMap.Load(execCommandFuncName)
+				cbFunc, ok := r.storage.callBackFuncMap.Load(EXEC_COMMAND_FUNC_NAME)
 				if !ok {
-					logError("callBackFunc load %v falied!", execCommandFuncName)
+					logError("callBackFunc load %v falied!", EXEC_COMMAND_FUNC_NAME)
 					return resp
 				}
 				execCommandFunc, ok := cbFunc.(func([]byte) error)

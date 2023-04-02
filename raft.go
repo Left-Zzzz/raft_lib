@@ -2,7 +2,6 @@ package raftlib
 
 import (
 	"raft_lib/pb"
-	"strconv"
 	"time"
 )
 
@@ -22,7 +21,7 @@ func (r *Raft) run() {
 
 func (r *Raft) runFollower() {
 	leaderID := r.Leader()
-	heartbeatTimer := randomTimeout(HeartbeatTimeout)
+	heartbeatTimer := randomTimeout(config.HeartbeatTimeout)
 	heartbeatStartTime := time.Now()
 	// 输出raft节点元信息
 	logInfo("entering follower state, id: %s, term: %d, leader_id: %s\n",
@@ -36,14 +35,14 @@ func (r *Raft) runFollower() {
 		select {
 		case <-heartbeatTimer:
 			// 重置心跳计时器
-			heartbeatTimer = randomTimeout(HeartbeatTimeout)
+			heartbeatTimer = randomTimeout(config.HeartbeatTimeout)
 
 			// 如果在当轮计时中有收到rpc信息，则不算超时，循环继续
 			lastContact := r.getLastContact()
 			isContacted := lastContact.After(heartbeatStartTime)
 			if isContacted {
 				// 重置当前任期超时时间和计时开始时间
-				heartbeatTimer = randomTimeout(HeartbeatTimeout)
+				heartbeatTimer = randomTimeout(config.HeartbeatTimeout)
 				heartbeatStartTime = time.Now()
 				continue
 			}
@@ -70,7 +69,7 @@ func (r *Raft) runCandidate() {
 	voteRespCh := r.electSelf()
 
 	// 设置选举计时器
-	electionTimer := randomTimeout(ElectionTimeout)
+	electionTimer := randomTimeout(config.ElectionTimeout)
 	voteGained := 0
 	leastVotesRequired := r.getNodeNum()/2 + 1
 
@@ -136,11 +135,6 @@ func (r *Raft) runLeader() {
 
 // 处理RPC请求
 func (r *Raft) processRpcRequest() {
-	server_id, _ := strconv.Atoi(string(r.getLocalID()))
-	if !isPrintRpcAppendEntryRequestCh[server_id] {
-		logInfo("processRpcRequest(): rpcExecCommandRequestCh addr:%p, id:%d.\n", r.rpc.rpcCh.rpcExecCommandRequestCh, server_id)
-		isPrintRpcAppendEntryRequestCh[server_id] = true
-	}
 	isContacted := true
 	select {
 	// 处理RequestVoteRequest RPC
@@ -161,7 +155,6 @@ func (r *Raft) processRpcRequest() {
 		r.rpc.rpcCh.rpcExecCommandResponseCh <- resp
 	default:
 		isContacted = false
-		// do noting
 	}
 
 	// 如果进行了RPC通信，将通信时间设置为最新通信时间
@@ -184,7 +177,7 @@ func (r *Raft) setLeaderID(id ServerID) {
 
 func (r *Raft) electSelf() <-chan *pb.RequestVoteResponse {
 	// 新建response通道
-	respCh := make(chan *pb.RequestVoteResponse, len(Servers))
+	respCh := make(chan *pb.RequestVoteResponse, len(config.Servers))
 
 	// 节点任期号+1
 	r.setCurrentTerm(r.getCurrentTerm() + 1)
@@ -218,7 +211,7 @@ func (r *Raft) electSelf() <-chan *pb.RequestVoteResponse {
 
 	// 遍历集群中其他节点，发送请求以获取投票
 	logDebug("start vote. local.ID:%v", r.localID)
-	for _, server := range Servers {
+	for _, server := range config.Servers {
 		// logDebug("server.ID:", server.ID, ". Suffrage:", server.Suffrage)
 		if server.Suffrage == Voter {
 			if server.ID == r.localID {
@@ -240,14 +233,15 @@ func (r *Raft) electSelf() <-chan *pb.RequestVoteResponse {
 }
 
 func (r *Raft) sendHeartBeatLoop() {
-	senHeartBeatInterval := HeartbeatTimeout / 2
+	senHeartBeatInterval := config.HeartbeatTimeout / 2
 	heartBeatTimer := time.After(senHeartBeatInterval)
 	for r.getState() == Leader {
 		<-heartBeatTimer
 		logDebug("leader send heart beat.")
 		prevLogIndex, prevLogTerm := r.raftState.getLastEntry()
+		ver := RPOTO_VER_APPEND_ENTRY_REQUEST
 		req := &pb.AppendEntryRequest{
-			Ver:          &RPOTO_VER_APPEND_ENTRY_REQUEST,
+			Ver:          &ver,
 			LeaderTerm:   r.getCurrentTerm(),
 			LeaderID:     string(r.Leader()),
 			PrevLogIndex: prevLogIndex,
@@ -255,7 +249,7 @@ func (r *Raft) sendHeartBeatLoop() {
 			LogType:      uint32(HeartBeat),
 			LeaderCommit: r.getCommitIndex(),
 		}
-		for _, server := range Servers {
+		for _, server := range config.Servers {
 			// 不用给自己发送RPC请求
 			if server.ID == r.Leader() {
 				continue
@@ -272,8 +266,9 @@ func (r *Raft) sendHeartBeatLoop() {
 // NoOp补丁，提交空日志
 func (r *Raft) noOp() {
 	// 直接复用execCommand
+	ver := PROTO_VER_EXEC_COMMAND_REQUEST
 	req := &pb.ExecCommandRequest{
-		Ver:     &PROTO_VER_EXEC_COMMAND_REQUEST,
+		Ver:     &ver,
 		LogType: uint32(LogNoOp),
 		Command: []byte(""),
 	}

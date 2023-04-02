@@ -68,8 +68,8 @@ func (ls *LogStorage) getEntry(index uint32) (Log, error) {
 	rowData := ls.entries[index]
 
 	logEntry := Log{}
-	json.Unmarshal(rowData, &logEntry)
-	return logEntry, nil
+	err := json.Unmarshal(rowData, &logEntry)
+	return logEntry, err
 }
 
 // 判断日志项索引号和任期是否正确
@@ -134,5 +134,5 @@ func (ls *LogStorage) batchCommit(index uint32, execFunc func([]byte) error) err
 
 // 注册应用日志的回调函数
 func (ls *LogStorage) registerCallBackFunc(f func([]byte) error) {
-	ls.callBackFuncMap.Store(execCommandFuncName, f)
+	ls.callBackFuncMap.Store(EXEC_COMMAND_FUNC_NAME, f)
 }

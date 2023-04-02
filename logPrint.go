@@ -1,10 +1,12 @@
 package raftlib
 
-import "log"
+import (
+	"log"
+)
 
 // 输出调试日志
 func logDebug(format string, v ...any) {
-	if DEBUG {
+	if config.DEBUG {
 		if v != nil {
 			log.Printf("[Debug] "+format, v...)
 		} else {

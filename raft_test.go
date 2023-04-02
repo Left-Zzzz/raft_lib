@@ -33,7 +33,7 @@ func TestRaftElection(t *testing.T) {
 	for _, node := range nodes {
 		go node.run()
 	}
-	<-time.After(ElectionTimeout)
+	<-time.After(config.ElectionTimeout)
 	for key, node := range nodes {
 		log.Printf("node%d:state = %s, leader_id = %s.\n", key, node.getState(), string(node.Leader()))
 	}
@@ -43,8 +43,8 @@ func TestRaftElection(t *testing.T) {
 func RaftCreateCluster(t *testing.T) []*Raft {
 	// TODO: TODO
 	nodes := []*Raft{}
-	for _, server := range Servers {
-		node := createRaft(server, uint64(len(Servers)))
+	for _, server := range config.Servers {
+		node := createRaft(server, uint64(len(config.Servers)))
 		nodes = append(nodes, node)
 	}
 	logInfo("Create cluster over.")
@@ -70,7 +70,7 @@ func TestRaftNoOp(t *testing.T) {
 	}
 	// 手动设置节点0为leader
 	nodes[0].setState(Leader)
-	nodes[0].setLeader(Servers[0])
+	nodes[0].setLeader(config.Servers[0])
 	nodes[0].setCurrentTerm(5)
 	// 判断NoOp补丁是否有效, 即是否能将之前未提交的日志安全提交
 
@@ -101,7 +101,7 @@ func TestRaftNoOp(t *testing.T) {
 		go node.run()
 	}
 	// 等待两倍心跳超时时间
-	<-time.After(HeartbeatTimeout * 2)
+	<-time.After(config.HeartbeatTimeout * 2)
 	// 获取每个节点下标为0的日志
 	entrys := []Log{}
 	for _, node := range nodes {
