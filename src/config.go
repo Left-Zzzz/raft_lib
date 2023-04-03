@@ -4,9 +4,6 @@ import (
 	"time"
 )
 
-// 可配置参数
-var config *Config = createConfig()
-
 type Config struct {
 	// 是否启用日志
 	DEBUG bool
@@ -21,9 +18,12 @@ type Config struct {
 
 	// Servers: 服务器元信息列表
 	Servers []Server
+
+	// 当前Raft节点
+	Localserver Server
 }
 
-func createConfig() *Config {
+func CreateConfig() *Config {
 	config := &Config{
 		DEBUG:            true,
 		HeartbeatTimeout: 1000 * time.Millisecond,
@@ -33,6 +33,7 @@ func createConfig() *Config {
 			{Voter, "0", "127.0.0.1", "5676"},
 			{Voter, "1", "127.0.0.1", "5677"},
 		},
+		Localserver: Server{Voter, "0", "127.0.0.1", "5676"},
 	}
 	return config
 }

@@ -2,7 +2,7 @@ package raftlib
 
 import (
 	"encoding/json"
-	"raft_lib/pb"
+	"raftlib/pb"
 )
 
 // Raft层 requestVoteRPC 处理逻辑
@@ -10,6 +10,7 @@ func (r *Raft) requestVote(req *pb.RequestVoteRequest) (resp *pb.RequestVoteResp
 	ver := RPOTO_VER_REQUEST_VOTE_RESPONSE
 	resp = &pb.RequestVoteResponse{
 		Ver:         &ver,
+		VoterID:     string(r.localID),
 		Term:        r.getCurrentTerm(),
 		VoteGranted: false,
 	}
@@ -110,7 +111,7 @@ func (r *Raft) appendEntry(req *pb.AppendEntryRequest) (resp *pb.AppendEntryResp
 	reqPrevLogIndex := req.GetPrevLogIndex()
 	reqPrevLogTerm := req.GetPrevLogTerm()
 	logDebug("req.GetPrevLogIndex():%v, req.GetPrevLogTerm():%v", reqPrevLogIndex, reqPrevLogTerm)
-	// 对比
+	// Debug对比
 	nodeEntry, err := r.storage.getEntry(reqPrevLogIndex)
 	if err != nil {
 		logDebug("r.storage.getEntry():%v", err)
@@ -135,13 +136,13 @@ func (r *Raft) appendEntry(req *pb.AppendEntryRequest) (resp *pb.AppendEntryResp
 	}
 	switch logType {
 	case HeartBeat:
-		// TODO: 后续有问题再补充
+		// 如果是心跳包，不用执行日志项追加复制操作
 		resp.Success = true
 	case LogCommand:
-		// TODO: 执行store log操作，因为是一样的操作，合并操作
+		// 执行store log操作，因为是一样的操作，合并操作
 		fallthrough
 	case LogNoOp:
-		// TODO: No Op补丁，执行store log操作
+		// No Op补丁，执行store log操作
 		logDebug("call r.storage.appendEntry()")
 		err := r.storage.appendEntryEncoded(logEntry.Index, logEntryEncoded)
 		if err != nil {
@@ -164,7 +165,7 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 	leaderID := r.Leader()
 	leaderAddress := ""
 	leaderPort := ""
-	for _, server := range config.Servers {
+	for _, server := range r.config.Servers {
 		logInfo("server.ID:%v, leaderID:%v", server.ID, leaderID)
 		if server.ID == leaderID {
 			leaderAddress = string(server.Address)
@@ -315,7 +316,7 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 	successCnt++
 
 	// 创建协程向其他节点发送请求
-	for _, node := range config.Servers {
+	for _, node := range r.config.Servers {
 		// 忽略自己
 		if node.ID == r.getLocalID() {
 			continue
@@ -343,8 +344,9 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 					return resp
 				}
 				// 执行entry中的命令, 将未提交的entry一并提交
-				for currentCommitIndex := r.getCurrentCommitIndex(); currentCommitIndex != currentLogIndex; currentCommitIndex = genNextLogIndex(currentCommitIndex) {
-					err := r.storage.commit(genNextLogIndex(currentCommitIndex), execCommandFunc)
+				for currentCommitIndex := r.getCurrentCommitIndex(); currentCommitIndex != currentLogIndex; {
+					currentCommitIndex = genNextLogIndex(currentCommitIndex)
+					err := r.storage.commit(currentCommitIndex, execCommandFunc)
 					if err != nil {
 						logError("r.storage.commit(): %v, index:%v", err, currentCommitIndex)
 						return resp
@@ -355,9 +357,9 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 						logError("r.storage.getEntry(): %v", err)
 						return resp
 					}
-					logDebug("r.storage.getEntry(%v): %v, command:%v", r.getCommitIndex(), debugLogEntry, string(debugLogEntry.Data))
+					logDebug("r.storage.getEntry(%v): %v, command:%v, currentLogIndex:%v", currentCommitIndex, debugLogEntry, string(debugLogEntry.Data), currentLogIndex)
 					// 执行完成，更新CommitIndex
-					r.setCommitIndex(genNextLogIndex(currentCommitIndex))
+					r.setCommitIndex(currentCommitIndex)
 				}
 
 				// 回复成功响应

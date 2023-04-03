@@ -4,9 +4,12 @@ import (
 	"log"
 )
 
+// 是否启用debug
+var debug bool = false
+
 // 输出调试日志
 func logDebug(format string, v ...any) {
-	if config.DEBUG {
+	if debug {
 		if v != nil {
 			log.Printf("[Debug] "+format, v...)
 		} else {

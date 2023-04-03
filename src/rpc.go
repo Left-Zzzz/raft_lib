@@ -5,7 +5,7 @@ import (
 	"errors"
 	"log"
 	"net"
-	"raft_lib/pb"
+	"raftlib/pb"
 	"sync"
 	"time"
 
@@ -39,9 +39,12 @@ type Rpc struct {
 
 	// 继承 protoc-gen-go-grpc 生成的服务端代码
 	pb.UnimplementedRpcServiceServer
+
+	// 配置文件
+	config *Config
 }
 
-func (r *Rpc) createRpcServer(raft *Raft) (*grpc.Server, error) {
+func (r *Rpc) createRpcServer(config *Config) (*grpc.Server, error) {
 	// 创建 gRPC 服务器
 	s := grpc.NewServer()
 	// 实例化RpcCh对象
@@ -59,6 +62,7 @@ func (r *Rpc) createRpcServer(raft *Raft) (*grpc.Server, error) {
 		rpcCh: rpcCh,
 	})
 	r.rpcCh = rpcCh
+	r.config = config
 	return s, nil
 }
 

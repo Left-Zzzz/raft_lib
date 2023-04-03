@@ -3,7 +3,7 @@ package raftlib
 import (
 	"encoding/json"
 	"log"
-	"raft_lib/pb"
+	"raftlib/pb"
 	"testing"
 	"time"
 )
@@ -15,7 +15,7 @@ func TestAppendEntriesRpc(t *testing.T) {
 		log.Fatal("node num must larger than 0.")
 	}
 	node := nodes[0]
-	go node.run()
+	go node.Run()
 	logDebug("TestAppendEntriesRpc(), raft info, append entriy addr:%p", node.rpc.rpcCh.rpcAppendEntryRequestCh)
 	datas := [4]string{"I am command1.", "I am command2.", "I am command3.", "I am command4."}
 	ver := RPOTO_VER_APPEND_ENTRY_REQUEST
@@ -63,7 +63,7 @@ func TestExecCommand(t *testing.T) {
 	nodes[0].raftState.currentTerm = 10
 	nodes[0].setLeader(config.Servers[0])
 	for _, node := range nodes {
-		go node.run()
+		go node.Run()
 	}
 	// 构造请求结构体
 	ver := PROTO_VER_EXEC_COMMAND_REQUEST

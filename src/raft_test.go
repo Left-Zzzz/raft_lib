@@ -6,6 +6,8 @@ import (
 	"time"
 )
 
+var config *Config = CreateConfig()
+
 // 集群启动测试
 func TestRaftCreateCluster(t *testing.T) {
 	nodes := RaftCreateCluster(t)
@@ -31,20 +33,19 @@ func TestRaftElection(t *testing.T) {
 	}
 	nodes[0].setState(Candidate)
 	for _, node := range nodes {
-		go node.run()
+		go node.Run()
 	}
 	<-time.After(config.ElectionTimeout)
 	for key, node := range nodes {
 		log.Printf("node%d:state = %s, leader_id = %s.\n", key, node.getState(), string(node.Leader()))
 	}
-
 }
 
 func RaftCreateCluster(t *testing.T) []*Raft {
-	// TODO: TODO
 	nodes := []*Raft{}
 	for _, server := range config.Servers {
-		node := createRaft(server, uint64(len(config.Servers)))
+		config.Localserver = server
+		node := CreateRaft(config)
 		nodes = append(nodes, node)
 	}
 	logInfo("Create cluster over.")
@@ -98,7 +99,7 @@ func TestRaftNoOp(t *testing.T) {
 	}
 	// 运行节点
 	for _, node := range nodes {
-		go node.run()
+		go node.Run()
 	}
 	// 等待两倍心跳超时时间
 	<-time.After(config.HeartbeatTimeout * 2)

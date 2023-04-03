@@ -1,7 +1,7 @@
 package raftlib
 
 import (
-	"raft_lib/pb"
+	"raftlib/pb"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -36,6 +36,9 @@ type Raft struct {
 
 	// rpc句柄
 	rpc *Rpc
+
+	// 配置文件
+	config *Config
 }
 
 // 获取领导者的Adress
@@ -74,21 +77,22 @@ func (r *Raft) setLocalID(localID ServerID) {
 	r.localID = localID
 }
 
-// TODO:未完成
-func createRaft(server Server, raft_node_num uint64) *Raft {
+func CreateRaft(config *Config) *Raft {
+	server := config.Localserver
 	// 构造Raft
 	r := &Raft{
 		localID:   server.ID,
 		localAddr: server.Address,
 		localPort: server.Port,
-		nodeNum:   raft_node_num,
+		nodeNum:   uint64(len(config.Servers)),
 		storage:   *createLogStorage(),
 		raftState: &raftState{
 			commitIndex:  MAX_LOG_INDEX_NUM,
 			lastLogIndex: MAX_LOG_INDEX_NUM,
 		},
+		config: config,
 	}
-
+	debug = config.DEBUG
 	r.setLeader(Server{})
 	// 构造Rpc结构体
 	rpc := &Rpc{
@@ -99,16 +103,17 @@ func createRaft(server Server, raft_node_num uint64) *Raft {
 
 	// 构造gRPC Server
 	var err any
-	r.rpc.server, err = r.rpc.createRpcServer(r)
+	r.rpc.server, err = r.rpc.createRpcServer(r.config)
 	go r.rpc.runRpcServer(r.rpc.server, server.Port)
 	if err != nil {
 		panic(err)
 	}
 
-	logDebug("createRaft(): rpcCh:%v", r.rpc.rpcCh)
+	logDebug("CreateRaft(): rpcCh:%v", r.rpc.rpcCh)
 	return r
 }
 
-func (r *Raft) registerCallBackFunc(f func([]byte) error) {
+func (r *Raft) RegisterCallBackFunc(f func([]byte) error) {
+	logDebug("Raft.RegisterCallBackFunc(): localAddr:%v, localPort:%v", r.localAddr, r.localPort)
 	r.storage.callBackFuncMap.Store(EXEC_COMMAND_FUNC_NAME, f)
 }

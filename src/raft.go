@@ -1,12 +1,12 @@
 package raftlib
 
 import (
-	"raft_lib/pb"
+	"raftlib/pb"
 	"time"
 )
 
-// run the main thread that handles leadership and RPC requests.
-func (r *Raft) run() {
+// Raft运行主流程
+func (r *Raft) Run() {
 	for {
 		switch r.getState() {
 		case Follower:
@@ -21,7 +21,7 @@ func (r *Raft) run() {
 
 func (r *Raft) runFollower() {
 	leaderID := r.Leader()
-	heartbeatTimer := randomTimeout(config.HeartbeatTimeout)
+	heartbeatTimer := randomTimeout(r.config.HeartbeatTimeout)
 	heartbeatStartTime := time.Now()
 	// 输出raft节点元信息
 	logInfo("entering follower state, id: %s, term: %d, leader_id: %s\n",
@@ -35,14 +35,14 @@ func (r *Raft) runFollower() {
 		select {
 		case <-heartbeatTimer:
 			// 重置心跳计时器
-			heartbeatTimer = randomTimeout(config.HeartbeatTimeout)
+			heartbeatTimer = randomTimeout(r.config.HeartbeatTimeout)
 
 			// 如果在当轮计时中有收到rpc信息，则不算超时，循环继续
 			lastContact := r.getLastContact()
 			isContacted := lastContact.After(heartbeatStartTime)
 			if isContacted {
 				// 重置当前任期超时时间和计时开始时间
-				heartbeatTimer = randomTimeout(config.HeartbeatTimeout)
+				heartbeatTimer = randomTimeout(r.config.HeartbeatTimeout)
 				heartbeatStartTime = time.Now()
 				continue
 			}
@@ -69,7 +69,7 @@ func (r *Raft) runCandidate() {
 	voteRespCh := r.electSelf()
 
 	// 设置选举计时器
-	electionTimer := randomTimeout(config.ElectionTimeout)
+	electionTimer := randomTimeout(r.config.ElectionTimeout)
 	voteGained := 0
 	leastVotesRequired := r.getNodeNum()/2 + 1
 
@@ -177,7 +177,7 @@ func (r *Raft) setLeaderID(id ServerID) {
 
 func (r *Raft) electSelf() <-chan *pb.RequestVoteResponse {
 	// 新建response通道
-	respCh := make(chan *pb.RequestVoteResponse, len(config.Servers))
+	respCh := make(chan *pb.RequestVoteResponse, len(r.config.Servers))
 
 	// 节点任期号+1
 	r.setCurrentTerm(r.getCurrentTerm() + 1)
@@ -211,7 +211,7 @@ func (r *Raft) electSelf() <-chan *pb.RequestVoteResponse {
 
 	// 遍历集群中其他节点，发送请求以获取投票
 	logDebug("start vote. local.ID:%v", r.localID)
-	for _, server := range config.Servers {
+	for _, server := range r.config.Servers {
 		// logDebug("server.ID:", server.ID, ". Suffrage:", server.Suffrage)
 		if server.Suffrage == Voter {
 			if server.ID == r.localID {
@@ -233,7 +233,7 @@ func (r *Raft) electSelf() <-chan *pb.RequestVoteResponse {
 }
 
 func (r *Raft) sendHeartBeatLoop() {
-	senHeartBeatInterval := config.HeartbeatTimeout / 2
+	senHeartBeatInterval := r.config.HeartbeatTimeout / 2
 	heartBeatTimer := time.After(senHeartBeatInterval)
 	for r.getState() == Leader {
 		<-heartBeatTimer
@@ -249,12 +249,12 @@ func (r *Raft) sendHeartBeatLoop() {
 			LogType:      uint32(HeartBeat),
 			LeaderCommit: r.getCommitIndex(),
 		}
-		for _, server := range config.Servers {
+		for _, server := range r.config.Servers {
 			// 不用给自己发送RPC请求
 			if server.ID == r.Leader() {
 				continue
 			}
-			// TODO 处理RPC回复
+			// 处理RPC回复
 			go r.rpc.AppendEntryRequest(server, req)
 			logDebug("process AppendEntryResponse.")
 		}
