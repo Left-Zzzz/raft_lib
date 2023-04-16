@@ -39,7 +39,6 @@ func TestAppendEntriesRpc(t *testing.T) {
 		resp := <-node.rpc.rpcCh.rpcAppendEntryResponseCh
 		logDebug("TestAppendEntriesRpc(), raft info, append entriy resp: %s", resp)
 	}
-
 }
 
 func TestExecCommand(t *testing.T) {
@@ -79,6 +78,5 @@ func TestExecCommand(t *testing.T) {
 		resp := <-nodes[0].rpc.rpcCh.rpcExecCommandResponseCh
 		logInfo("resp from rpcExecCommandResponseCh:%v", resp)
 	}
-	<-time.After(time.Second * 5)
-
+	<-time.After(time.Second * 2)
 }

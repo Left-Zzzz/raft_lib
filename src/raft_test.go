@@ -37,6 +37,64 @@ func TestRaftElection(t *testing.T) {
 	}
 	<-time.After(config.ElectionTimeout)
 	for key, node := range nodes {
+		if node.Leader() != "0" {
+			t.Fatalf("node.Leader() != 0")
+		}
+		log.Printf("node%d:state = %s, leader_id = %s.\n", key, node.getState(), string(node.Leader()))
+	}
+}
+
+// 选举限制测试
+func TestRaftElectionRestrict(t *testing.T) {
+	nodes := RaftCreateCluster(t)
+	if len(nodes) < 2 {
+		t.Fatalf("nodes must not less than 2.")
+	}
+	entry := Log{
+		Index:   uint32(0),
+		Term:    1,
+		LogType: LogCommand,
+		Data:    []byte("i am a data."),
+	}
+	nodes[1].storage.appendEntryEntity(0, entry)
+	nodes[1].setLastEntry(0, 0)
+	nodes[0].setState(Candidate)
+	for _, node := range nodes {
+		go node.Run()
+	}
+	<-time.After(config.ElectionTimeout * 3)
+	for key, node := range nodes {
+		if node.Leader() != "1" {
+			t.Fatalf("node.Leader() != 1")
+		}
+		log.Printf("node%d:state = %s, leader_id = %s.\n", key, node.getState(), string(node.Leader()))
+	}
+}
+
+// 心跳测试
+func TestHeartBeatLoop(t *testing.T) {
+	nodes := RaftCreateCluster(t)
+	if len(nodes) == 0 {
+		t.Fatalf("nodes must greater than 0.")
+	}
+	nodes[0].setState(Leader)
+	nodes[0].leaderID = "0"
+	// 定义callbackFunc
+	cbFunc := func(data []byte) error {
+		log.Println("cbFunc:", string(data))
+		return nil
+	}
+	for _, node := range nodes {
+		node.storage.registerCallBackFunc(cbFunc)
+	}
+	for _, node := range nodes {
+		go node.Run()
+	}
+	<-time.After(time.Second * 2)
+	for key, node := range nodes {
+		if node.Leader() != "0" {
+			t.Fatalf("node.Leader() != 0")
+		}
 		log.Printf("node%d:state = %s, leader_id = %s.\n", key, node.getState(), string(node.Leader()))
 	}
 }
@@ -103,7 +161,7 @@ func TestRaftNoOp(t *testing.T) {
 	}
 	// 等待两倍心跳超时时间
 	<-time.After(config.HeartbeatTimeout * 2)
-	// 获取每个节点下标为0的日志
+	// 获取每个节点下标为5的日志
 	entrys := []Log{}
 	for _, node := range nodes {
 		entry, err := node.storage.getEntry(5)

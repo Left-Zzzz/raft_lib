@@ -1,10 +1,12 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"errors"
 	"fmt"
 	"log"
+	"os"
 	raftlib "raft_lib/src"
 	"raftlib/pb"
 	"strings"
@@ -47,18 +49,10 @@ func (c *Client) registerExecCommandFunc() {
 		command := string(b)
 		// 解析Redis命令
 		commandSplited := strings.Split(command, " ")
-		fmt.Printf("cbFunc running, command:%v, commandSplited:%v\n", command, commandSplited)
+		// fmt.Printf("cbFunc running, command:%v, commandSplited:%v\n", command, commandSplited)
 
 		// 执行Redis命令
 		switch strings.ToLower(commandSplited[0]) {
-		case "get":
-			fmt.Printf("cbFunc: get\n")
-			result, err := c.redisClient.Get(commandSplited[1]).Result()
-			if err != nil {
-				fmt.Printf("Get error: %v\n", err)
-				return err
-			}
-			fmt.Printf("cbFunc: Get result: %v\n", result)
 		case "set":
 			fmt.Printf("cbFunc: set\n")
 			result, err := c.redisClient.Set(commandSplited[1], commandSplited[2], 0).Result()
@@ -68,7 +62,7 @@ func (c *Client) registerExecCommandFunc() {
 			}
 			fmt.Printf("Set result: %v\n", result)
 		case "del":
-			fmt.Printf("cbFunc: del\n")
+			// fmt.Printf("cbFunc: del\n")
 			result, err := c.redisClient.Del(commandSplited[1], commandSplited[2]).Result()
 			if err != nil {
 				fmt.Printf("Del error:%v \n", err)
@@ -76,7 +70,7 @@ func (c *Client) registerExecCommandFunc() {
 			}
 			fmt.Printf("Del result: %v\n", result)
 		default:
-			fmt.Printf("Invalid command:%v \n", commandSplited[0])
+			// fmt.Printf("Invalid command:%v \n", commandSplited[0])
 		}
 		return nil
 	}
@@ -180,24 +174,38 @@ func (c *Client) execCommand(logType raftlib.LogType, command []byte) (bool, err
 }
 
 func main() {
-	config.DEBUG = true
-	cbFunc := func(b []byte) error {
-		fmt.Println("fmt.Println:", string(b))
-		return nil
+	config.DEBUG = false
+	// 配置Servers
+	config.Servers = []raftlib.Server{
+		{raftlib.Voter, "0", "192.168.224.101", "5678"},
+		{raftlib.Voter, "1", "192.168.224.102", "5678"},
+		{raftlib.Voter, "2", "192.168.224.103", "5678"},
 	}
-	// 创建节点
-	config.Localserver = config.Servers[1]
-	node := raftlib.CreateRaft(config)
-	// 注册日志提交回调函数
-	node.RegisterCallBackFunc(cbFunc)
-	go node.Run()
-	<-time.After(time.Second * 1)
 	// 创建client
 	config.Localserver = config.Servers[0]
 	localServer = config.Servers[0]
 	client := createClient(localServer)
-	<-time.After(time.Second * 2)
-	resp, _ := client.execCommand(raftlib.LogCommand, []byte("set testleft left"))
-	fmt.Println("TestClient: recp:", resp)
-	<-time.After(time.Second * 1)
+	for {
+		reader := bufio.NewReader(os.Stdin)
+		command, _ := reader.ReadString('\n')
+		// 解析Redis命令
+		commandSplited := strings.Split(command, " ")
+		switch strings.ToLower(commandSplited[0]) {
+		case "del":
+			fallthrough
+		case "set":
+			resp, _ := client.execCommand(raftlib.LogCommand, []byte(command))
+			if resp {
+				fmt.Println("success.")
+			} else {
+				fmt.Println("success.")
+			}
+		case "get":
+			result, err := client.redisClient.Get(commandSplited[1]).Result()
+			if err != nil {
+				fmt.Printf("Get error: %v\n", err)
+			}
+			fmt.Println(result)
+		}
+	}
 }

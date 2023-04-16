@@ -8,10 +8,13 @@ import (
 // Raft层 requestVoteRPC 处理逻辑
 func (r *Raft) requestVote(req *pb.RequestVoteRequest) (resp *pb.RequestVoteResponse) {
 	ver := RPOTO_VER_REQUEST_VOTE_RESPONSE
+	lastLogIndex, lastLogTerm := r.getLastEntry()
 	resp = &pb.RequestVoteResponse{
 		Ver:         &ver,
 		VoterID:     string(r.localID),
 		Term:        r.getCurrentTerm(),
+		LastLogIdx:  lastLogIndex,
+		LastLogTerm: lastLogTerm,
 		VoteGranted: false,
 	}
 
@@ -28,13 +31,10 @@ func (r *Raft) requestVote(req *pb.RequestVoteRequest) (resp *pb.RequestVoteResp
 	// 安全性补丁：判断日志是否是最新的，如果不是最新的话，candidate节点回退至follower
 	// 这样做法是保证日志是安全的，不会被日志少的节点当选leader，进而造成已提交日志被覆盖情况
 
-	// 将上一个日志的索引任期号添加到response中
-	lastLogIndex, lastLogTerm := r.getLastEntry()
-	resp.LastLogIdx = lastLogIndex
-	resp.LastLogTerm = lastLogTerm
-
 	// 如果follower日志比candidate日志新，拒绝投票
-	if lastLogIndex > req.LastLogIdx {
+	logDebug("lastLogIndex:%v, req.LastLogIdx:%v", lastLogIndex, req.LastLogIdx)
+	logDebug("lastLogTerm: %v, req.LastLogTerm: %v", lastLogTerm, req.LastLogTerm)
+	if genActualLogIndex(lastLogIndex) > genActualLogIndex(req.LastLogIdx) {
 		return resp
 	}
 	if lastLogIndex == req.LastLogIdx && lastLogTerm > req.LastLogTerm {
@@ -327,46 +327,38 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 	for {
 		ch := <-appendEntryResponseCh
 		// 如果收到成功响应消息
-		if ch.GetSuccess() {
-			successCnt++
-			logDebug("execCommand(): recieve sucess response. success count:%v, success required:%v", successCnt, leastSuccessRequired)
-			// 成功响应的节点超过一半
-			if successCnt >= int(leastSuccessRequired) {
-				// 从map中拿到回调函数
-				cbFunc, ok := r.storage.callBackFuncMap.Load(EXEC_COMMAND_FUNC_NAME)
-				if !ok {
-					logError("callBackFunc load %v falied!", EXEC_COMMAND_FUNC_NAME)
-					return resp
-				}
-				execCommandFunc, ok := cbFunc.(func([]byte) error)
-				if !ok {
-					logError("cbFunc transfer type (func([]byte) error) failed!")
-					return resp
-				}
-				// 执行entry中的命令, 将未提交的entry一并提交
-				for currentCommitIndex := r.getCurrentCommitIndex(); currentCommitIndex != currentLogIndex; {
-					currentCommitIndex = genNextLogIndex(currentCommitIndex)
-					err := r.storage.commit(currentCommitIndex, execCommandFunc)
-					if err != nil {
-						logError("r.storage.commit(): %v, index:%v", err, currentCommitIndex)
-						return resp
-					}
-					// 打印输出已提交的日志项的信息
-					debugLogEntry, err := r.storage.getEntry(currentCommitIndex)
-					if err != nil {
-						logError("r.storage.getEntry(): %v", err)
-						return resp
-					}
-					logDebug("r.storage.getEntry(%v): %v, command:%v, currentLogIndex:%v", currentCommitIndex, debugLogEntry, string(debugLogEntry.Data), currentLogIndex)
-					// 执行完成，更新CommitIndex
-					r.setCommitIndex(currentCommitIndex)
-				}
-
-				// 回复成功响应
-				logDebug("execCommand(): recieve over half success, repsonce true and exec command.")
-				resp.Success = true
-				return resp
-			}
+		if !ch.GetSuccess() {
+			continue
 		}
+		successCnt++
+		logDebug("execCommand(): recieve sucess response. success count:%v, success required:%v", successCnt, leastSuccessRequired)
+		if successCnt < int(leastSuccessRequired) {
+			continue
+		}
+		// 成功响应的节点超过一半
+		// 从map中拿到回调函数
+		cbFunc, ok := r.storage.callBackFuncMap.Load(EXEC_COMMAND_FUNC_NAME)
+		if !ok {
+			logError("callBackFunc load %v falied!", EXEC_COMMAND_FUNC_NAME)
+			return resp
+		}
+		execCommandFunc, ok := cbFunc.(func([]byte) error)
+		if !ok {
+			logError("cbFunc transfer type (func([]byte) error) failed!")
+			return resp
+		}
+		// 执行entry中的命令, 将未提交的entry一并提交
+		err := r.storage.batchCommit(currentLogIndex, execCommandFunc)
+		if err != nil {
+			logError("r.storage.batchCommit(): %v, index:%v", err, currentLogIndex)
+			return resp
+		}
+		// 执行完成，更新CommitIndex
+		r.setCommitIndex(currentLogIndex)
+
+		// 回复成功响应
+		logDebug("execCommand(): recieve over half success, repsonce true and exec command.")
+		resp.Success = true
+		return resp
 	}
 }

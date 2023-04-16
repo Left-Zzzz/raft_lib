@@ -26,8 +26,8 @@ type Config struct {
 func CreateConfig() *Config {
 	config := &Config{
 		DEBUG:            true,
-		HeartbeatTimeout: 1000 * time.Millisecond,
-		ElectionTimeout:  1000 * time.Millisecond,
+		HeartbeatTimeout: 1500 * time.Millisecond,
+		ElectionTimeout:  2500 * time.Millisecond,
 		RpcTimeout:       50000000 * time.Millisecond,
 		Servers: []Server{
 			{Voter, "0", "127.0.0.1", "5676"},

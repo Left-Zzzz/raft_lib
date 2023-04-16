@@ -94,14 +94,16 @@ func (r *Raft) runCandidate() {
 				// 如果是最新的，则raftState回退至follower
 				lastLogIdx, lastLogTerm := r.getLastEntry()
 				if lastLogIdx < vote.GetLastLogIdx() || lastLogTerm < vote.GetLastLogTerm() {
+					logDebug("recieve an newer log node from id:%s, term:%d.\n", vote.VoterID, vote.Term)
 					r.setState(Follower)
-					continue
+					break
 				}
 				// 如果不是最新的，则continue
 				continue
 			}
 			logDebug("recieve an vote agree from id:%s, term:%d.\n", vote.VoterID, vote.Term)
 			voteGained++
+			logDebug("voteGained:%v, leastVotesRequired:%v.\n", voteGained, leastVotesRequired)
 			if leastVotesRequired <= uint64(voteGained) {
 				// 设置角色为leader
 				r.setState(Leader)
