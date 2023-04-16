@@ -153,9 +153,9 @@ func (c *Client) execCommand(logType raftlib.LogType, command []byte) (bool, err
 	}
 	ctx := context.Background()
 	resp, _ := c.leaderService.ExecCommand(ctx, req)
-	fmt.Printf("Client.execCommand resp:%v\n", resp.Success)
+	fmt.Printf("Client.execCommand resp:%v\n", resp.GetSuccess())
 	// 如果结果为否
-	if !resp.Success {
+	if !resp.GetSuccess() {
 		// 如果有新的leader的address和port，更新
 		leaderID := resp.GetLeaderID()
 		if leaderID == "" {
@@ -170,7 +170,7 @@ func (c *Client) execCommand(logType raftlib.LogType, command []byte) (bool, err
 			return c.execCommand(logType, command)
 		}
 	}
-	return resp.Success, nil
+	return resp.GetSuccess(), nil
 }
 
 func main() {

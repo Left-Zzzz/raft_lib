@@ -200,11 +200,12 @@ func (r *Raft) electSelf() <-chan *pb.RequestVoteResponse {
 			// 发送RPC请求
 			resp, err := r.rpc.RequestVoteRequest(peer, req)
 			if err != nil {
+				logDebug("resp:%p", resp)
 				logError("failed to make requestVote RPC",
 					"target", peer,
 					"error", err,
-					"term", req.Term)
-				resp.Term = req.Term
+					"term", req.GetTerm())
+				resp.Term = req.GetTerm()
 				resp.VoteGranted = false
 			}
 			respCh <- resp
@@ -220,12 +221,12 @@ func (r *Raft) electSelf() <-chan *pb.RequestVoteResponse {
 				logDebug("voting for self, term:%v, localID:%d", r.getCurrentTerm(), r.localID)
 				// 自己给自己一票
 				respCh <- &pb.RequestVoteResponse{
-					Term:        req.Term,
+					Term:        req.GetTerm(),
 					VoteGranted: true,
 					VoterID:     string(r.localID),
 				}
 			} else {
-				logDebug("asking for vote, term:%v, from:%v, address:%v", req.Term, server.ID, server.Address)
+				logDebug("asking for vote, term:%v, from:%v, address:%v", req.GetTerm(), server.ID, server.Address)
 				go askPeer(server)
 			}
 		}

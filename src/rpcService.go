@@ -32,24 +32,24 @@ func (r *Raft) requestVote(req *pb.RequestVoteRequest) (resp *pb.RequestVoteResp
 	// 这样做法是保证日志是安全的，不会被日志少的节点当选leader，进而造成已提交日志被覆盖情况
 
 	// 如果follower日志比candidate日志新，拒绝投票
-	logDebug("lastLogIndex:%v, req.LastLogIdx:%v", lastLogIndex, req.LastLogIdx)
-	logDebug("lastLogTerm: %v, req.LastLogTerm: %v", lastLogTerm, req.LastLogTerm)
-	if genActualLogIndex(lastLogIndex) > genActualLogIndex(req.LastLogIdx) {
+	logDebug("lastLogIndex:%v, req.LastLogIdx:%v", lastLogIndex, req.GetLastLogIdx())
+	logDebug("lastLogTerm: %v, req.LastLogTerm: %v", lastLogTerm, req.GetLastLogTerm())
+	if genActualLogIndex(lastLogIndex) > genActualLogIndex(req.GetLastLogIdx()) {
 		return resp
 	}
-	if lastLogIndex == req.LastLogIdx && lastLogTerm > req.LastLogTerm {
+	if lastLogIndex == req.GetLastLogIdx() && lastLogTerm > req.GetLastLogTerm() {
 		return resp
 	}
 
 	// 如果已投票给候选者中候选者最大任期号不小于candidate任期号，拒绝投票
-	if r.getLatestVoteGrantedTerm() >= req.Term {
+	if r.getLatestVoteGrantedTerm() >= req.GetTerm() {
 		return resp
 	}
 
 	// 满足条件，可以投票
 	resp.VoteGranted = true
 	// 记录已投票给候选者中候选者最大任期号
-	r.setLatestVoteGrantedTerm(req.Term)
+	r.setLatestVoteGrantedTerm(req.GetTerm())
 	return resp
 }
 
@@ -285,7 +285,7 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 		Index:   currentLogIndex,
 		Term:    currentTerm,
 		LogType: LogType(req.GetLogType()),
-		Data:    req.Command,
+		Data:    req.GetCommand(),
 	})
 	if err != nil {
 		logError(" .json.Marshal():%v", err)
