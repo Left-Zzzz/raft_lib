@@ -62,10 +62,10 @@ func TestRaftElectionRestrict(t *testing.T) {
 	for _, node := range nodes {
 		go node.Run()
 	}
-	<-time.After(config.ElectionTimeout * 3)
+	<-time.After(config.ElectionTimeout * 4)
 	for key, node := range nodes {
 		if node.Leader() != "1" {
-			t.Fatalf("node.Leader() != 1")
+			t.Fatalf("node.Leader() != 1, leader: %v", node.Leader())
 		}
 		log.Printf("node%d:state = %s, leader_id = %s.\n", key, node.getState(), string(node.Leader()))
 	}
@@ -102,7 +102,7 @@ func TestHeartBeatLoop(t *testing.T) {
 func RaftCreateCluster(t *testing.T) []*Raft {
 	nodes := []*Raft{}
 	for _, server := range config.Servers {
-		config.Localserver = server
+		config.LocalServer = server
 		node := CreateRaft(config)
 		nodes = append(nodes, node)
 	}
@@ -142,7 +142,7 @@ func TestRaftNoOp(t *testing.T) {
 			Data:    []byte("i am a data."),
 		}
 		nodes[0].storage.appendEntryEntity(uint32(i), entry)
-		nodes[0].storage.commit(uint32(i), func([]byte) error { return nil })
+		nodes[0].storage.commit(uint32(i), func([]byte) ([]byte, error) { return nil, nil })
 	}
 	nodes[0].setCommitIndex(4)
 	nodes[0].setLastEntry(4, 1)

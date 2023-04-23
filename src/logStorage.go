@@ -81,36 +81,36 @@ func (ls *LogStorage) isIdxTermCorrect(index uint32, term uint64) bool {
 	}
 	entry, err := ls.getEntry(index)
 	if err != nil {
-		logError("an error occurred while getting entry:%v, index: %v", err, index)
+		logDebug("isIdxTermCorrect(): an error occurred while getting entry:%v, index: %v", err, index)
 		return false
 	}
 	return entry.Term == term
 }
 
 // 提交日志，调用回调函数处理日志命令并执行
-func (ls *LogStorage) commit(index uint32, execFunc func([]byte) error) error {
+func (ls *LogStorage) commit(index uint32, execFunc func([]byte) ([]byte, error)) ([]byte, error) {
 	// 获取日志
 	logEntry, err := ls.getEntry(index)
 	// 如果获取日志出错，返回错误
 	if err != nil {
-		return err
+		return nil, err
 	}
 	// 如果不是LogCommand类型，直接跳过
 	if logEntry.LogType != LogCommand {
-		return nil
+		return nil, nil
 	}
 	// 调用回调函数
-	err = execFunc(logEntry.Data)
+	respData, err := execFunc(logEntry.Data)
 	// 如果不发生错误，更新提交日志索引
 	if err == nil {
 		ls.setCommitIndex(index)
 		logDebug("LogStorage.commit(): commitIndex: %v", index)
 	}
-	return err
+	return respData, err
 }
 
 // 提交日志，调用回调函数处理日志命令并执行
-func (ls *LogStorage) batchCommit(index uint32, execFunc func([]byte) error) error {
+func (ls *LogStorage) batchCommit(index uint32, execFunc func([]byte) ([]byte, error)) error {
 	// 如果没有日志提交，直接返回
 	if index == MAX_LOG_INDEX_NUM {
 		return nil
@@ -123,7 +123,7 @@ func (ls *LogStorage) batchCommit(index uint32, execFunc func([]byte) error) err
 	defer ls.commitLock.Unlock()
 	for curIndex := genNextLogIndex(ls.getCommitIndex()); curIndex <= index; curIndex++ {
 		logDebug("commit entry(index:%v), commitIndex:%v", curIndex, index)
-		err := ls.commit(curIndex, execFunc)
+		_, err := ls.commit(curIndex, execFunc)
 		// 如果获取日志出错，返回错误
 		if err != nil {
 			return err

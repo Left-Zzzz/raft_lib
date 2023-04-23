@@ -123,6 +123,7 @@ func (r *Raft) runCandidate() {
 }
 
 func (r *Raft) runLeader() {
+	logInfo("entering leader state, node: %s, term: %d\n", string(r.getLocalID()), int(r.getCurrentTerm()))
 	// 安全性补丁：NoOp补丁，leader提交非自身任期的日志是十分危险的，会导致已提交日志被覆盖
 	// 所以leader节点只能提交自身任期的日志，而NoOp补丁既可以提交自身日志，又能将旧日志安全提交
 	r.noOp()
@@ -238,6 +239,19 @@ func (r *Raft) electSelf() <-chan *pb.RequestVoteResponse {
 func (r *Raft) sendHeartBeatLoop() {
 	senHeartBeatInterval := r.config.HeartbeatTimeout / 2
 	heartBeatTimer := time.After(senHeartBeatInterval)
+	respCh := make(chan *pb.AppendEntryResponse, 10)
+	// 构造选举请求函数，构造responseMessage
+	askPeer := func(peer Server, req *pb.AppendEntryRequest) {
+		r.goFunc(func() {
+			// 发送RPC请求
+			resp, err := r.rpc.AppendEntryRequest(peer, req)
+			if err != nil {
+				logDebug("resp:%p", resp)
+				return
+			}
+			respCh <- resp
+		})
+	}
 	for r.getState() == Leader {
 		<-heartBeatTimer
 		logDebug("leader send heart beat.")
@@ -258,16 +272,33 @@ func (r *Raft) sendHeartBeatLoop() {
 				continue
 			}
 			// 处理RPC回复
-			go r.rpc.AppendEntryRequest(server, req)
+			askPeer(server, req)
 			logDebug("process AppendEntryResponse.")
 		}
+
+		// 当appendEntry请求收到false回复时，执行NoOp补丁，让日志落后的节点更新日志
+		select {
+		case resp := <-respCh:
+			if !resp.GetSuccess() {
+				logInfo("noOp")
+				r.noOp()
+			}
+		default:
+			// do nothing.
+		}
+
 		heartBeatTimer = time.After(senHeartBeatInterval)
 	}
-
 }
 
 // NoOp补丁，提交空日志
 func (r *Raft) noOp() {
+	// 最多只能有一个NoOp执行体
+	ok := r.noOpLock.TryLock()
+	if !ok {
+		return
+	}
+	defer r.noOpLock.Unlock()
 	// 直接复用execCommand
 	ver := PROTO_VER_EXEC_COMMAND_REQUEST
 	req := &pb.ExecCommandRequest{

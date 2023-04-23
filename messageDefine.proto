@@ -62,4 +62,5 @@ message execCommandResponse {
     string LeaderAddress = 3;
     string LeaderPort = 4;
     bool Success = 5;
+    bytes Data = 6;
 }

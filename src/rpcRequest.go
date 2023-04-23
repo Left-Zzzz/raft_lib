@@ -18,7 +18,9 @@ func (r *Rpc) RequestVoteRequest(
 	}
 	logDebug("start send requestvote.\n")
 
-	ctx := context.Background()
+	// 设置超时
+	ctx, cancel := context.WithTimeout(context.Background(), r.config.RpcTimeout)
+	defer cancel()
 
 	r.clientsMutex.Lock()
 	// 当rpc调用失败是rpcResp会返回空，后续对resp的操作会出错，这里使用rpcResp替换掉resp返回
@@ -43,6 +45,7 @@ func (r *Rpc) AppendEntryRequest(
 	if err != nil {
 		return resp, err
 	}
+
 	logDebug("start send append entry request.\n")
 
 	// 设置超时
@@ -53,7 +56,7 @@ func (r *Rpc) AppendEntryRequest(
 	rpcResp, err := r.clients[peer.ID].AppendEntry(ctx, req)
 	r.clientsMutex.Unlock()
 	if err != nil {
-		logError(": An error occured while calling AppendEntryRPC:%v", err)
+		logError("An error occured while calling AppendEntryRPC:%v", err)
 		return resp, err
 	}
 

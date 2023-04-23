@@ -23,6 +23,11 @@ func (r *Raft) requestVote(req *pb.RequestVoteRequest) (resp *pb.RequestVoteResp
 		return resp
 	}
 
+	// 如果自身是candidate，拒绝投票
+	if r.getState() == Candidate {
+		return resp
+	}
+
 	// 如果follower任期比candidate大，拒绝投票
 	if r.getCurrentTerm() > req.GetTerm() {
 		return resp
@@ -65,12 +70,18 @@ func (r *Raft) appendEntry(req *pb.AppendEntryRequest) (resp *pb.AppendEntryResp
 	// 如果是新leader
 	rpcLeaderID := ServerID(req.GetLeaderID())
 	rpcLeaderTerm := req.GetLeaderTerm()
+	// 纠正错误的follower任期，错误follower任期在follower断线时发生
+	if r.Leader() == rpcLeaderID && r.getCurrentTerm() != rpcLeaderTerm {
+		r.setCurrentTerm(rpcLeaderTerm)
+		logInfo("LeaderTerm change, LeaderID:%s, LeaderTerm:%d\n", string(rpcLeaderID), rpcLeaderTerm)
+	}
 	if r.Leader() != rpcLeaderID {
-		// 如果新leader任期不小于本节点任期，则设置leaderId为新leader的Id
-		if currentTerm <= rpcLeaderTerm {
+		// 如果之前没有leader，或新leader任期不小于本节点任期，则设置leaderId为新leader的Id
+		if r.Leader() == "" || currentTerm <= rpcLeaderTerm {
 			r.setLeaderID(rpcLeaderID)
 			r.setCurrentTerm(rpcLeaderTerm)
-			logDebug("rpcLeaderID: %s, rpcLeaderTerm:%d\n", string(rpcLeaderID), rpcLeaderTerm)
+			r.setState(Follower)
+			logInfo("accept new leader, LeaderID:%s, LeaderTerm:%d\n", string(rpcLeaderID), rpcLeaderTerm)
 		} else {
 			// 新leader任期小于本节点任期，拒绝请求
 			return resp
@@ -92,7 +103,7 @@ func (r *Raft) appendEntry(req *pb.AppendEntryRequest) (resp *pb.AppendEntryResp
 				logError("callBackFunc load %v falied!", EXEC_COMMAND_FUNC_NAME)
 				return
 			}
-			execCommandFunc, ok := cbFunc.(func([]byte) error)
+			execCommandFunc, ok := cbFunc.(func([]byte) ([]byte, error))
 			if !ok {
 				logError("cbFunc transfer type (func([]byte) error) failed!")
 				return
@@ -130,10 +141,6 @@ func (r *Raft) appendEntry(req *pb.AppendEntryRequest) (resp *pb.AppendEntryResp
 	logEntryEncoded := req.GetEntry()
 	// 获取应该被插入日志项的索引号
 	logEntry := &Log{}
-	err = json.Unmarshal(logEntryEncoded, logEntry)
-	if err != nil {
-		logWarn("json.Unmarshal(req.GetEntry(), logEntry):%v", err)
-	}
 	switch logType {
 	case HeartBeat:
 		// 如果是心跳包，不用执行日志项追加复制操作
@@ -142,6 +149,10 @@ func (r *Raft) appendEntry(req *pb.AppendEntryRequest) (resp *pb.AppendEntryResp
 		// 执行store log操作，因为是一样的操作，合并操作
 		fallthrough
 	case LogNoOp:
+		err = json.Unmarshal(logEntryEncoded, logEntry)
+		if err != nil {
+			logWarn("json.Unmarshal(req.GetEntry(), logEntry):%v", err)
+		}
 		// No Op补丁，执行store log操作
 		logDebug("call r.storage.appendEntry()")
 		err := r.storage.appendEntryEncoded(logEntry.Index, logEntryEncoded)
@@ -235,20 +246,22 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 		r.goFunc(func() {
 			var err error
 			var resp *pb.AppendEntryResponse
-			// 如果遇到日志缺漏时，回退以下三个参数
+			// 如果遇到日志缺漏时，回退参数
 			currentLogIndex := logIndex
 			for {
 				// 构造AppendEntryRequest
 				tempAppendEntryReq := genAppendEntryRequest(currentLogIndex)
 				logDebug("askPeer: tempAppendEntryReq: %v", tempAppendEntryReq)
-				// 循环发送直到被接收回复为止
 				for {
 					resp, err = r.rpc.AppendEntryRequest(peer, tempAppendEntryReq)
 					if err != nil {
 						logDebug("r.rpc.AppendEntryRequest(): %v", err)
-					} else {
-						break
 					}
+					break
+				}
+				// 发生rpc错误，跳过后续流程，继续
+				if err != nil {
+					continue
 				}
 				// 如果resp.Success为true, 继续提交下一个日志
 				if resp.GetSuccess() {
@@ -264,7 +277,7 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 					// 如果resp.Success为false, 回溯提交上一个日志
 					// 终止回溯条件
 					if currentLogIndex == MAX_LOG_INDEX_NUM {
-						logError("askPeer: prevLogIndex == MAX_LOG_INDEX_NUM")
+						logError("askPeer: prevLogIndex == MAX_LOG_INDEX_NUM(%v)")
 						break
 					}
 					currentLogIndex = genPrevLogIndex(currentLogIndex)
@@ -342,13 +355,13 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 			logError("callBackFunc load %v falied!", EXEC_COMMAND_FUNC_NAME)
 			return resp
 		}
-		execCommandFunc, ok := cbFunc.(func([]byte) error)
+		execCommandFunc, ok := cbFunc.(func([]byte) ([]byte, error))
 		if !ok {
 			logError("cbFunc transfer type (func([]byte) error) failed!")
 			return resp
 		}
-		// 执行entry中的命令, 将未提交的entry一并提交
-		err := r.storage.batchCommit(currentLogIndex, execCommandFunc)
+		// 执行entry中的命令
+		respData, err := r.storage.commit(currentLogIndex, execCommandFunc)
 		if err != nil {
 			logError("r.storage.batchCommit(): %v, index:%v", err, currentLogIndex)
 			return resp
@@ -358,6 +371,7 @@ func (r *Raft) execCommand(req *pb.ExecCommandRequest) *pb.ExecCommandResponse {
 
 		// 回复成功响应
 		logDebug("execCommand(): recieve over half success, repsonce true and exec command.")
+		resp.Data = respData
 		resp.Success = true
 		return resp
 	}

@@ -39,6 +39,9 @@ type Raft struct {
 
 	// 配置文件
 	config *Config
+
+	// NoOp锁
+	noOpLock sync.Mutex
 }
 
 // 获取领导者的Adress
@@ -78,7 +81,7 @@ func (r *Raft) setLocalID(localID ServerID) {
 }
 
 func CreateRaft(config *Config) *Raft {
-	server := config.Localserver
+	server := config.LocalServer
 	// 构造Raft
 	r := &Raft{
 		localID:   server.ID,
@@ -113,7 +116,7 @@ func CreateRaft(config *Config) *Raft {
 	return r
 }
 
-func (r *Raft) RegisterCallBackFunc(f func([]byte) error) {
+func (r *Raft) RegisterCallBackFunc(f func([]byte) ([]byte, error)) {
 	logDebug("Raft.RegisterCallBackFunc(): localAddr:%v, localPort:%v", r.localAddr, r.localPort)
 	r.storage.callBackFuncMap.Store(EXEC_COMMAND_FUNC_NAME, f)
 }

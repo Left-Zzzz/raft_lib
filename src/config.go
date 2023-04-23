@@ -20,20 +20,20 @@ type Config struct {
 	Servers []Server
 
 	// 当前Raft节点
-	Localserver Server
+	LocalServer Server
 }
 
 func CreateConfig() *Config {
 	config := &Config{
 		DEBUG:            true,
-		HeartbeatTimeout: 1500 * time.Millisecond,
-		ElectionTimeout:  2500 * time.Millisecond,
-		RpcTimeout:       50000000 * time.Millisecond,
+		HeartbeatTimeout: 300 * time.Millisecond,
+		ElectionTimeout:  200 * time.Millisecond,
+		RpcTimeout:       100 * time.Millisecond,
 		Servers: []Server{
 			{Voter, "0", "127.0.0.1", "5676"},
 			{Voter, "1", "127.0.0.1", "5677"},
 		},
-		Localserver: Server{Voter, "0", "127.0.0.1", "5676"},
+		LocalServer: Server{Voter, "0", "127.0.0.1", "5676"},
 	}
 	return config
 }

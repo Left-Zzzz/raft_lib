@@ -105,8 +105,8 @@ func (r *Rpc) runRpcClient(peer Server) error {
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		// 断线重连参数
 		grpc.WithKeepaliveParams(keepalive.ClientParameters{
-			Time:                10 * time.Second,
-			Timeout:             100 * time.Millisecond,
+			Time:                2 * time.Second,
+			Timeout:             500 * time.Millisecond,
 			PermitWithoutStream: true}))
 	if err != nil {
 		log.Fatal(err)
